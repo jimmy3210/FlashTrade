@@ -1,0 +1,47 @@
+# ===================================================
+# flashtradeapi-prod.yml — 生产环境配置
+# 由 Spring Cloud Config Server 提供
+#
+# 【安全原则】
+# - 所有敏感信息（密码、密钥、Token）通过 Docker Secret 或系统环境变量注入
+# - 此文件不包含任何凭证，可以安全纳入版本控制
+# ===================================================
+
+server:
+  port: ${SERVER_PORT:8080}
+
+app:
+  jwt:
+    # 生产环境 JWT 有效期：30 分钟（比开发环境更严格）
+    expiration-ms: ${JWT_EXPIRATION_MS:1800000}
+    # 生产环境 Refresh Token 有效期：7 天
+    refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}
+    # 密钥通过环境变量或 Docker Secret 注入 → 见 application-prod.yml
+
+  schwab:
+    # 生产环境调用真实 Schwab API
+    mock-enabled: false
+    # clientId / clientSecret 通过 Docker Secret 注入，不在此配置
+    redirect-uri: ${SCHWAB_REDIRECT_URI}
+
+  etrade:
+    # 生产环境调用真实 E*TRADE API
+    mock-enabled: false
+    base-url: ${ETRADE_BASE_URL:https://api.etrade.com/v1}
+    request-token-url: ${ETRADE_REQUEST_TOKEN_URL:https://api.etrade.com/oauth/request_token}
+    access-token-url: ${ETRADE_ACCESS_TOKEN_URL:https://api.etrade.com/oauth/access_token}
+    # consumerKey / consumerSecret 通过 Docker Secret 注入
+
+  tastyworks:
+    # 生产环境调用真实 Tastyworks API
+    mock-enabled: false
+    base-url: ${TASTYWORKS_BASE_URL:https://api.tastyworks.com}
+    # username / password 通过 Docker Secret 注入
+
+  websocket:
+    push-interval-ms: 30000
+
+logging:
+  level:
+    com.tradex.flashtrade: WARN
+    root: ERROR

@@ -1,0 +1,40 @@
+# ===================================================
+# FlashTrade Config Server 配置
+# ===================================================
+server:
+  port: 8888
+
+spring:
+  application:
+    name: flashtrade-config-server
+
+  cloud:
+    config:
+      server:
+        # native: 使用本地文件系统（开发/测试）
+        # 生产环境切换为 git profile 并设置 CONFIG_GIT_URI
+        native:
+          # Docker 容器内路径（由 docker-compose volumes 挂载）
+          search-locations: file:/config-repo
+        # Git 配置源示例（生产环境启用）
+        # git:
+        #   uri: ${CONFIG_GIT_URI:https://github.com/your-org/flashtrade-config}
+        #   default-label: main
+        #   search-paths: "{application}"
+        #   username: ${CONFIG_GIT_USERNAME:}
+        #   password: ${CONFIG_GIT_PASSWORD:}
+        #   clone-on-start: true
+
+  # 激活 native profile 使用本地文件系统
+  profiles:
+    active: ${CONFIG_SERVER_PROFILE:native}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    org.springframework.cloud.config: INFO

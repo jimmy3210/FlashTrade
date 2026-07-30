@@ -1,0 +1,202 @@
+# ===================================================
+# FlashTradeAPI — 本地开发环境
+# 启动命令：docker compose up -d
+# 停止命令：docker compose down
+# 删除数据：docker compose down -v
+#
+# 初始化 Secrets（首次运行前执行）：
+#   mkdir -p secrets
+#   echo "flashtrade123"  > secrets/db_password.txt
+#   echo "$(openssl rand -base64 32)" > secrets/jwt_secret.txt
+# ===================================================
+
+# -----------------------------------------------
+# Docker Secrets 定义
+# -----------------------------------------------
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+  jwt_secret:
+    file: ./secrets/jwt_secret.txt
+  schwab_client_id:
+    file: ./secrets/schwab_client_id.txt
+  schwab_client_secret:
+    file: ./secrets/schwab_client_secret.txt
+  tastytrade_api_key:
+    file: ./secrets/tastytrade_api_key.txt
+
+services:
+
+  # -----------------------------------------------
+  # Spring Cloud Config Server（配置中心）
+  # 端口：8888
+  # 配置源：./config-repo（本地文件系统）
+  # -----------------------------------------------
+  config-server:
+    build:
+      context: ../config-server
+      dockerfile: Dockerfile
+    container_name: flashtrade-config-server
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: native
+    volumes:
+      # 只读挂载配置仓库
+      - ./config-repo:/config-repo:ro
+    ports:
+      - "8888:8888"
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8888/actuator/health" ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - flashtrade-network
+
+  # -----------------------------------------------
+  # MySQL 8.0
+  # 端口：3306
+  # 密码：通过 Docker Secret 注入
+  # -----------------------------------------------
+  mysql:
+    image: mysql:8.0
+    container_name: flashtrade-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/db_password
+      MYSQL_USER: flashtrade
+      MYSQL_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
+    ports:
+      - "3308:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: [ "CMD-SHELL", "mysqladmin ping -h localhost -u root --password=\"$(cat /run/secrets/db_password)\" --silent" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - flashtrade-network
+
+  # -----------------------------------------------
+  # Redis 7.x
+  # 端口：6379
+  # 持久化：AOF 开启
+  # -----------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: flashtrade-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --save 60 1 --loglevel warning
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - flashtrade-network
+  # -----------------------------------------------
+  # FlashTradeAPI アプリケーション（本番/CI 用）
+  # コメントアウト: ローカル開発では mvn spring-boot:run を使用
+  # -----------------------------------------------
+  flashtrade-api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: flashtrade-api
+    restart: unless-stopped
+    env_file:
+      - .env # 非敏感环境変数（可选）
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      CONFIG_SERVER_URL: http://config-server:8888
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USERNAME: flashtrade
+      # DB_PASSWORD will be provided via secret at runtime if available; fallback handled by app config
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      # Tastytrade API Key will be injected via Docker secret mounted at /run/secrets/tastytrade_api_key
+      # To expose as Spring property `app.tastytrade.api-key`, set APP_TASTYTRADE_API_KEY in .env or env here.
+      # Example: APP_TASTYTRADE_API_KEY: "${APP_TASTYTRADE_API_KEY:-}"
+    secrets:
+      - db_password
+      - jwt_secret
+      - schwab_client_id
+      - schwab_client_secret
+    ports:
+      - "8080:8080"
+    depends_on:
+      config-server:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - flashtrade-network
+
+  flyway:
+    image: flyway/flyway:10.5.0
+    container_name: flashtrade-flyway
+    volumes:
+      - ../src/main/resources/db:/flyway/sql:ro
+    environment:
+      FLYWAY_URL: jdbc:mysql://mysql:3306/flash_trade_dev?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+      FLYWAY_USER: flashtrade
+      FLYWAY_PASSWORD: flashtrade123
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql/migration,filesystem:/flyway/sql/seed
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - flashtrade-network
+    command: [ "migrate" ]
+
+  flashtrade-mock:
+    build:
+      context: ../../flash-trade-mock
+      dockerfile: Dockerfile
+    container_name: flashtrade-mock
+    restart: unless-stopped
+    environment:
+      SERVER_PORT: 8090
+    ports:
+      - "8090:8090"
+    networks:
+      - flashtrade-network
+
+  flashtrade-admin:
+    build:
+      context: ../../flash-trade-web
+      dockerfile: Dockerfile
+    container_name: flashtrade-admin
+    restart: unless-stopped
+    environment:
+      VITE_API_BASE_URL: http://flashtrade-api:8080
+    ports:
+      - "5174:5174"
+    depends_on:
+      - flashtrade-api
+    networks:
+      - flashtrade-network
+
+volumes:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  flashtrade-network:
+    driver: bridge

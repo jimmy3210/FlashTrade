@@ -1,0 +1,52 @@
+# ===================================================
+# .gitignore — FlashTradeAPI
+# ===================================================
+
+# Maven build output
+target/
+*.jar
+*.war
+*.class
+
+# Spring Boot devtools
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# IDE
+.idea/
+*.iws
+*.iml
+*.ipr
+.vscode/settings.json
+.DS_Store
+
+# ===================================================
+# 【セキュリティ重要】機密情報
+# ===================================================
+
+# 実際の環境変数ファイル（.env.example は追跡する）
+.env
+.env.local
+.env.*.local
+
+# Docker Secret ファイル（平文パスワードを含む）
+docker/secrets/*.txt
+docker/secrets/*.key
+docker/secrets/*.pem
+# secrets/ ディレクトリのガイドファイルは追跡する
+!docker/secrets/README.md
+
+# SSL/TLS 証明書
+*.pem
+*.key
+*.crt
+*.p12
+*.jks
+
+# ログ
+logs/
+*.log
+
+# OS
+Thumbs.db

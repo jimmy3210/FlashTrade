@@ -1,0 +1,76 @@
+# Spring Boot 配置基础文件
+# 激活的 profile 由环境变量 SPRING_PROFILES_ACTIVE 控制，默认使用 dev
+spring:
+  application:
+    name: FlashTradeAPI
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  # Spring Cloud Config Client
+  # optional: 表示 Config Server 不可用时不阻止应用启动（开发友好）
+  config:
+    import: "optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+
+# Actuator 端点（各环境共用基础设置）
+management:
+  endpoints:
+    web:
+      exposure:
+        # refresh: 触发 @RefreshScope Bean 重新加载
+        # info: 应用信息  health: 健康检查
+        include: health,info,refresh
+  endpoint:
+    health:
+      show-details: when-authorized
+    refresh:
+      # POST /actuator/refresh — 需要 ADMIN 角色（由 SecurityConfig 控制）
+      enabled: true
+
+# SpringDoc / Swagger UI
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: alpha
+  info:
+    title: FlashTradeAPI
+    version: "@project.version@"
+    description: 多券商证券交易聚合平台 API
+
+# ============================================================
+# FIX Gateway 設定
+# flashtrade.fix.enabled=true にすることで FIX 機能が有効化される
+# ============================================================
+flashtrade:
+  fix:
+    enabled: false          # 本番/開発で true に変更（または profiles で上書き）
+    log-directory: logs/fix
+    file-store-path: data/fix
+    sessions:
+      # Phase 1: ローカルテストサーバー接続
+      - key: "test-local"
+        config-file: "fix/test/test-initiator.cfg"
+        enabled: false
+        description: "ローカルテストサーバー接続（FIX 4.2）"
+      # Phase 2: ブローカー A UAT 環境（FIX 4.2）
+      - key: "broker-a-uat"
+        config-file: "fix/sessions/fix42-initiator.cfg"
+        enabled: false
+        description: "Broker A UAT 環境 FIX 4.2"
+      # Phase 2: ブローカー B UAT 環境（FIX 4.4）
+      - key: "broker-b-uat"
+        config-file: "fix/sessions/fix44-initiator.cfg"
+        enabled: false
+        description: "Broker B UAT 環境 FIX 4.4"
+      # Phase 3: ブローカー C 本番環境（FIX 5.0 SP2）
+      - key: "broker-c-prod"
+        config-file: "fix/sessions/fix50sp2-initiator.cfg"
+        enabled: false
+        description: "Broker C 本番環境 FIX 5.0 SP2"
+    rate-limit:
+      messages-per-second: 30
+    test-server:
+      enabled: false        # dev/test profile では true に設定
+      port: 9876
+      fix-version: "FIX.4.2"
+

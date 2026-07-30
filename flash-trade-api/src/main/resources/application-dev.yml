@@ -1,0 +1,140 @@
+# ===================================================
+# application-dev.yml  — 开发环境配置
+# ===================================================
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:mysql://${DB_HOST:mysql}:${DB_PORT:3306}/flash_trade_dev?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+    username: ${DB_USERNAME:flashtrade}
+    password: ${DB_PASSWORD:flashtrade123}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQL8Dialect
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+
+  flyway:
+    enabled: true
+    encoding: UTF-8
+    locations: classpath:db/migration,classpath:db/seed
+    baseline-on-migrate: true
+    validate-on-migrate: true
+
+# JWT 配置（阶段 3 实装时填写实际密钥）
+app:
+  jwt:
+    secret: ${JWT_SECRET:dev-secret-key-change-in-production-must-be-256-bits}
+    expiration-ms: 3600000       # 1 小时
+    refresh-expiration-ms: 604800000  # 7 天
+  websocket:
+    push-interval-ms: 30000      # 持仓推送间隔（毫秒）
+  # 嘉信证券（Charles Schwab）配置
+  schwab:
+    client-id: ${SCHWAB_CLIENT_ID:dev-client-id}
+    client-secret: ${SCHWAB_CLIENT_SECRET:dev-client-secret}
+    redirect-uri: ${SCHWAB_REDIRECT_URI:https://127.0.0.1}
+    base-url: https://api.schwabapi.com/trader/v1
+    token-url: https://api.schwabapi.com/v1/oauth/token
+    token-cache-key-prefix: schwab:oauth:token
+    token-refresh-threshold-seconds: 120
+    connect-timeout-ms: 5000
+    read-timeout-ms: 15000
+    mock-enabled: true            # 开发环境使用 Mock 数据
+  # 券商数据同期设置
+  # userId 对应本地数据库 users.id 的值
+  # 枚举所有券商与账户 ID 的映射关系
+  broker-sync:
+    enabled: true
+    interval-ms: 300000           # 同期間隔（5分）
+    accounts:
+      - userId: 1
+        brokerName: SCHWAB
+        accountId: dev-account-schwab-001
+      - userId: 1
+        brokerName: ETRADE
+        accountId: dev-account-etrade-001
+      - userId: 1
+        brokerName: TASTYWORKS
+        accountId: dev-account-tastyworks-001
+
+  # CORS 允许来源（逗号分隔）
+  cors:
+    allowed-origins: http://localhost:3000,http://localhost:5173
+
+  # 登录尝试次数限制
+  rate-limit:
+    login:
+      max-attempts: 5
+      lock-window-seconds: 300
+      lock-duration-seconds: 900
+
+# Resilience4j 配置
+resilience4j:
+  circuit-breaker:
+    instances:
+      broker:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+        register-health-indicator: true
+  retry:
+    instances:
+      broker:
+        max-attempts: 3
+        wait-duration: 1s
+        exponential-backoff-multiplier: 2.0
+        retry-exceptions:
+        tastytrade:
+          base-url: https://api.tastytrade.com
+          api-key: ""
+          mock-enabled: true
+          - com.tradex.flashtrade.exception.BrokerApiException
+
+logging:
+  level:
+    com.tradex.flashtrade: DEBUG
+    org.springframework.security: DEBUG
+    org.flywaydb: DEBUG
+    fix.audit: INFO       # FIX 監査ログ
+
+# ============================================================
+# FIX Gateway — 開発環境設定（テストサーバー有効）
+# ============================================================
+flashtrade:
+  fix:
+    enabled: true
+    test-server:
+      enabled: true
+      port: 9876
+      fix-version: "FIX.4.2"
+    sessions:
+      - key: "test-local"
+        config-file: "fix/test/test-initiator.cfg"
+        enabled: true
+        description: "ローカルテストサーバー接続（FIX 4.2）"
+

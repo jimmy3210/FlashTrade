@@ -1,0 +1,28 @@
+# ===================================================
+# flashtradeapi.yml — 所有环境通用配置
+# 由 Spring Cloud Config Server 提供
+# 敏感信息（密碼、APIKey）不在此文件中 — 通过环境变量注入
+# ===================================================
+
+spring:
+  application:
+    name: FlashTradeAPI
+
+app:
+  # WebSocket 持仓推送间隔（所有环境默认 30 秒）
+  websocket:
+    push-interval-ms: 30000
+
+  # 日次 PnL スナップショット cron（NY 時間 17:00 月〜金）
+  snapshot:
+    cron: "0 0 17 * * MON-FRI"
+    timezone: "America/New_York"
+
+  # Schwab 通用参数（非敏感）
+  schwab:
+    base-url: https://api.schwabapi.com/trader/v1
+    token-url: https://api.schwabapi.com/v1/oauth/token
+    token-cache-key-prefix: schwab:oauth:token
+    token-refresh-threshold-seconds: 120
+    connect-timeout-ms: 5000
+    read-timeout-ms: 15000

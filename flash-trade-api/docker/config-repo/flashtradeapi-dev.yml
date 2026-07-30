@@ -1,0 +1,40 @@
+# ===================================================
+# flashtradeapi-dev.yml — 开发环境配置
+# 由 Spring Cloud Config Server 提供
+# ===================================================
+
+server:
+  port: 8080
+
+app:
+  jwt:
+    # 开发环境 JWT 有效期：1 小时
+    expiration-ms: 3600000
+    # 开发环境 Refresh Token 有效期：7 天
+    refresh-expiration-ms: 604800000
+
+  schwab:
+    # 开发环境使用 Mock 数据，无需真实 Schwab 账户
+    mock-enabled: true
+
+  etrade:
+    # 开发环境使用 Mock 数据，无需真实 E*TRADE 账户
+    mock-enabled: true
+    base-url: https://api.etrade.com/v1
+    request-token-url: https://api.etrade.com/oauth/request_token
+    access-token-url: https://api.etrade.com/oauth/access_token
+
+  tastyworks:
+    # 开发环境使用 Mock 数据，无需真实 Tastyworks 账户
+    mock-enabled: true
+    base-url: https://api.tastyworks.com
+
+  websocket:
+    push-interval-ms: 10000  # 开发环境缩短为 10 秒方便调试
+
+logging:
+  level:
+    com.tradex.flashtrade: DEBUG
+    org.springframework.security: DEBUG
+    org.flywaydb: DEBUG
+    org.springframework.cloud.config: DEBUG

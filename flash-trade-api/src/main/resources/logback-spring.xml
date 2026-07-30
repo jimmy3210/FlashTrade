@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!-- ==========================================
+         自定义脱敏转换器
+         将 password / token / secret / apiKey 等敏感字段
+         替换为 [MASKED]
+    ========================================== -->
+    <conversionRule conversionWord="mask"
+                    converterClass="com.tradex.flashtrade.logging.MaskingConverter"/>
+
+    <!-- ==========================================
+         开发环境 (dev) — 彩色控制台输出
+    ========================================== -->
+    <springProfile name="dev,default">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%d{HH:mm:ss.SSS} %highlight(%-5level) [%cyan(%thread)] [traceId=%X{traceId:-}] %logger{36} - %mask(%msg)%n</pattern>
+                <charset>UTF-8</charset>
+            </encoder>
+        </appender>
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+        <logger name="com.tradex.flashtrade" level="DEBUG"/>
+        <logger name="org.springframework.security" level="INFO"/>
+        <logger name="org.flywaydb" level="INFO"/>
+    </springProfile>
+
+    <!-- ==========================================
+         生产环境 (prod) — JSON 结构化日志 (Logstash)
+         假设与 ELK / Grafana Loki 集成
+    ========================================== -->
+    <springProfile name="prod">
+        <appender name="JSON_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <includeCallerData>false</includeCallerData>
+                <fieldNames>
+                    <timestamp>timestamp</timestamp>
+                    <version>[ignore]</version>
+                    <levelValue>[ignore]</levelValue>
+                </fieldNames>
+                <!-- 自动包含 MDC 中的 traceId -->
+                <includeMdcKeyName>traceId</includeMdcKeyName>
+                <!-- 对敏感字段进行脱敏处理 -->
+                <jsonGeneratorDecorator
+                    class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator">
+                    <valueMask>
+                        <value>password</value>
+                        <mask>[MASKED]</mask>
+                    </valueMask>
+                    <valueMask>
+                        <value>secret</value>
+                        <mask>[MASKED]</mask>
+                    </valueMask>
+                    <valueMask>
+                        <value>apiKey</value>
+                        <mask>[MASKED]</mask>
+                    </valueMask>
+                </jsonGeneratorDecorator>
+            </encoder>
+        </appender>
+        <root level="WARN">
+            <appender-ref ref="JSON_CONSOLE"/>
+        </root>
+        <logger name="com.tradex.flashtrade" level="INFO"/>
+    </springProfile>
+
+    <!-- ==========================================
+         test 环境 — 简单标准输出
+    ========================================== -->
+    <springProfile name="test">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%d{HH:mm:ss.SSS} %-5level [%thread] %logger{20} - %msg%n</pattern>
+            </encoder>
+        </appender>
+        <root level="WARN">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+        <logger name="com.tradex.flashtrade" level="DEBUG"/>
+    </springProfile>
+
+</configuration>
