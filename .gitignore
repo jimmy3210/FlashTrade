@@ -1,0 +1,73 @@
+# =========================
+# Global ignore rules
+# =========================
+
+# OS generated files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE / editor
+.vscode/
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+
+# Environment and secrets
+.env
+.env.*
+*.local
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Docker local config
+flash-trade-api/docker/.env
+flash-trade-api/docker/secrets/
+flash-trade-api/docker/*.log
+
+# Java / Spring Boot
+**/target/
+**/build/
+**/out/
+**/bin/
+**/.gradle/
+**/classes/
+*.class
+*.jar
+*.war
+*.ear
+
+# Node / Vite / Frontend
+**/node_modules/
+**/dist/
+**/coverage/
+**/.vite/
+**/.turbo/
+**/npm-debug.log*
+**/yarn-debug.log*
+**/pnpm-debug.log*
+
+# Flutter / Dart
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/.pub-cache/
+**/build/
+**/coverage/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.pid
+
+# Test / local runtime artifacts
+**/.cache/
+**/.tmp/
+**/tmp/
+
