@@ -45,7 +45,7 @@
 
 ### 前置条件
 
-- Java 21+（推荐 Amazon Corretto 21）
+- Java 21+（推荐 Microsoft Build of OpenJDK 21）
 - Maven 3.9.11+
 - Docker Desktop 4.33+
 

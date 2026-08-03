@@ -5,8 +5,9 @@
 # =============================================================
 
 # ---- ステージ 1: ビルド ----
-FROM maven:3.9-amazoncorretto-21 AS builder
+FROM mcr.microsoft.com/openjdk/jdk:21-ubuntu AS builder
 
+RUN apt-get update && apt-get install -y maven && rm -rf /var/lib/apt/lists/*
 WORKDIR /build
 
 # 依存関係キャッシュのために pom.xml を先にコピー
@@ -19,10 +20,10 @@ COPY src ./src
 RUN mvn -e -B package -DskipTests
 
 # ---- ステージ 2: ランタイム ----
-FROM amazoncorretto:21-alpine
+FROM mcr.microsoft.com/openjdk/jdk:21-ubuntu
 
 # セキュリティ: 非 root ユーザーでアプリを実行
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
 WORKDIR /app
 

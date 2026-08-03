@@ -192,7 +192,7 @@ GET /api/orders?paginated=false&status=FILLED  # 条件付き全件取得
 
 ### 7-4. Docker 镜像精简
 - 当前：推测使用标准 JRE 或 JDK 基础镜像
-- 建议：使用多阶段构建（`maven:3.9-amazoncorretto-21` 编译，`amazoncorretto:21-alpine` 运行），减少镜像体积；运行阶段使用非 root 用户（`USER 1001`）
+- 建议：使用多阶段构建（基于 Microsoft Build of OpenJDK 21 的镜像编译与运行），减少镜像体积；运行阶段使用非 root 用户（`USER 1001`）
 
 ---
 

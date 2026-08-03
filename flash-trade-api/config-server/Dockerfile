@@ -4,19 +4,19 @@
 # ===================================================
 
 # --- ビルドステージ ---
-FROM amazoncorretto:21-alpine AS builder
+FROM mcr.microsoft.com/openjdk/jdk:21-ubuntu AS builder
+RUN apt-get update && apt-get install -y maven && rm -rf /var/lib/apt/lists/*
 WORKDIR /build
 COPY pom.xml .
 COPY src ./src
-RUN apk add --no-cache maven && \
-    mvn -B package -DskipTests --no-transfer-progress
+RUN mvn -B package -DskipTests --no-transfer-progress
 
 # --- 実行ステージ ---
-FROM amazoncorretto:21-alpine
+FROM mcr.microsoft.com/openjdk/jdk:21-ubuntu
 WORKDIR /app
 
 # セキュリティ: 非 root ユーザーで実行
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 COPY --from=builder /build/target/flashtrade-config-server-*.jar app.jar
 RUN chown appuser:appgroup app.jar
 USER appuser
