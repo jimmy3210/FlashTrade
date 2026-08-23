@@ -1,8 +1,10 @@
-/// デモモード設定
-/// --dart-define=kDemoMode=true で有効化（デフォルト: false）
-/// 例: flutter run -d macos --dart-define=kDemoMode=true
-const bool kDemoMode = bool.fromEnvironment('kDemoMode', defaultValue: false);
+/// 旧デモモード設定。
+/// すべてのローカル開発はバックエンドの Mock / 実券商 API を経由する。
+/// ここに偽データの分岐を残さない。kDemoMode は常に false とする。
+const bool kDemoMode = false;
 
-/// デモログインの認証情報
+@Deprecated('Fake demo data is disabled; use backend mock broker APIs instead.')
 const String kDemoUsername = 'demo';
+
+@Deprecated('Fake demo data is disabled; use backend mock broker APIs instead.')
 const String kDemoPassword = 'demo';

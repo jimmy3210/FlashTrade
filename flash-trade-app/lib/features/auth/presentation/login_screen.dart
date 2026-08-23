@@ -1,8 +1,12 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:window_manager/window_manager.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/demo_mode.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/tech_background.dart';
 import '../domain/auth_state.dart';
@@ -35,6 +39,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         .login(_usernameController.text.trim(), _passwordController.text);
   }
 
+  Future<void> _exitApp() async {
+    if (!kIsWeb &&
+        (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
+      await windowManager.close();
+      return;
+    }
+
+    await SystemNavigator.pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -63,6 +77,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       body: Stack(
         children: [
           const Positioned.fill(child: TechBackground()),
+          Positioned(
+            top: 16,
+            right: 16,
+            child: IconButton(
+              onPressed: _exitApp,
+              tooltip: '退出',
+              icon: const Icon(Icons.close, color: AppColors.textPrimary),
+              style: IconButton.styleFrom(
+                backgroundColor: AppColors.cardBg.withValues(alpha: 0.7),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: const BorderSide(color: AppColors.border),
+                ),
+              ),
+            ),
+          ),
           SafeArea(
             child: Center(
               child: ConstrainedBox(
@@ -129,47 +159,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 fontSize: 15,
                               ),
                             ),
-                            if (kDemoMode) ...[
-                              const SizedBox(height: 20),
-                              GestureDetector(
-                                onTap: () {
-                                  _usernameController.text = kDemoUsername;
-                                  _passwordController.text = kDemoPassword;
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 12,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.warning.withAlpha(25),
-                                    borderRadius: BorderRadius.circular(5),
-                                    border: Border.all(
-                                      color: AppColors.warning.withAlpha(100),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.info_outline,
-                                        color: AppColors.warning,
-                                        size: 16,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          l10n.loginDemoHint,
-                                          style: const TextStyle(
-                                            color: AppColors.warning,
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
                             const SizedBox(height: 28),
                             TextFormField(
                               controller: _usernameController,
@@ -286,7 +275,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   String _errorMessage(Object e, AppLocalizations l10n) {
     final msg = e.toString();
-    if (msg.contains('demo/demo')) return l10n.loginErrorInvalid;
     if (msg.contains('401')) return l10n.loginErrorInvalid;
     if (msg.contains('SocketException') || msg.contains('Network')) {
       return l10n.loginErrorNetwork;

@@ -76,6 +76,7 @@ class _DesktopDashboardState extends ConsumerState<DesktopDashboard> {
     if (symbol.isEmpty) return;
     try {
       await ref.read(watchlistRepositoryProvider).addToWatchlist(symbol);
+      // ignore: unused_result
       ref.refresh(watchlistProvider);
     } catch (_) {
       // ignore failure for now
@@ -87,6 +88,7 @@ class _DesktopDashboardState extends ConsumerState<DesktopDashboard> {
     required String selectedSymbol,
     required AssetViewResponse? selectedAsset,
     required String estimatedAmount,
+    required bool isSelectedSymbolInWatchlist,
     required AsyncValue<List<PositionResponse>> positionsAsync,
     required AsyncValue<List<OrderResponse>> ordersAsync,
     required AsyncValue<List<AssetViewResponse>> assetViewAsync,
@@ -369,6 +371,8 @@ class _DesktopDashboardState extends ConsumerState<DesktopDashboard> {
                             selectedSymbol: selectedSymbol,
                             selectedAsset: selectedAsset,
                             estimatedAmount: estimatedAmount,
+                            isSelectedSymbolInWatchlist:
+                                isSelectedSymbolInWatchlist,
                             positionsAsync: positionsAsync,
                             ordersAsync: ordersAsync,
                             assetViewAsync: assetViewAsync,
@@ -1953,9 +1957,9 @@ class _OrdersPanel extends StatelessWidget {
                         .map(
                           (order) => DataRow(
                             cells: [
-                              DataCell(Text(order.symbol ?? '-')),
+                              DataCell(Text(order.symbol)),
                               DataCell(Text(order.side == 'BUY' ? '买入' : '卖出')),
-                              DataCell(Text('${order.quantity ?? 0}')),
+                              DataCell(Text('${order.quantity}')),
                               DataCell(
                                 Text(
                                   order.price != null
@@ -2510,7 +2514,7 @@ class _OrdersView extends StatelessWidget {
                         .map(
                           (order) => DataRow(
                             cells: [
-                              DataCell(Text(order.symbol ?? '-')),
+                              DataCell(Text(order.symbol)),
                               DataCell(
                                 Text(
                                   order.side == 'BUY' ? '买入' : '卖出',
@@ -2521,7 +2525,7 @@ class _OrdersView extends StatelessWidget {
                                   ),
                                 ),
                               ),
-                              DataCell(Text('${order.quantity ?? 0}')),
+                              DataCell(Text('${order.quantity}')),
                               DataCell(
                                 Text(
                                   order.price != null

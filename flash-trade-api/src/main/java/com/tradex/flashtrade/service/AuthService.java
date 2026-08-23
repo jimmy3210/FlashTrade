@@ -1,12 +1,7 @@
 package com.tradex.flashtrade.service;
 
-import com.tradex.flashtrade.dto.auth.LoginRequest;
-import com.tradex.flashtrade.dto.auth.LoginResponse;
-import com.tradex.flashtrade.entity.User;
-import com.tradex.flashtrade.exception.BusinessException;
-import com.tradex.flashtrade.exception.ErrorCode;
-import com.tradex.flashtrade.repository.UserRepository;
-import com.tradex.flashtrade.security.JwtTokenProvider;
+import java.util.concurrent.TimeUnit;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -15,9 +10,14 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.stereotype.Service;
 
-import java.util.concurrent.TimeUnit;
+import com.tradex.flashtrade.dto.auth.LoginRequest;
+import com.tradex.flashtrade.dto.auth.LoginResponse;
+import com.tradex.flashtrade.exception.BusinessException;
+import com.tradex.flashtrade.exception.ErrorCode;
+import com.tradex.flashtrade.repository.UserRepository;
+import com.tradex.flashtrade.security.JwtTokenProvider;
 
-@Service
+@Service("appAuthService")
 public class AuthService {
 
     private static final Logger log = LoggerFactory.getLogger(AuthService.class);
@@ -97,7 +97,7 @@ public class AuthService {
         try {
             String username = jwtTokenProvider.getUsernameFromToken(refreshToken);
             userRepository.findByUsername(username)
-                    .filter(User::isEnabled)
+                    .filter(user -> Boolean.TRUE.equals(user.isEnabled()))
                     .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_CREDENTIALS));
 
             // 将旧 Refresh Token 立即列入黑名单废除

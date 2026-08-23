@@ -1,11 +1,10 @@
 package com.tradex.flashtrade.audit;
 
-import java.util.Enumeration;
-
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -28,7 +27,9 @@ import lombok.extern.slf4j.Slf4j;
 public class ApiCallLogAspect {
     
     @Autowired private AuditLogger auditLogger;
-    @Autowired(required = false) private AuthService authService;
+    @Autowired(required = false)
+    @Qualifier("securityAuthService")
+    private AuthService authService;
     @Autowired(required = false) private JwtTokenProvider jwtTokenProvider;
     
     /**

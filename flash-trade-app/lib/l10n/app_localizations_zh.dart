@@ -331,6 +331,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get desktopPriceChartPlaceholder => '价格走势图';
 
   @override
+  String get desktopAddToWatchlist => '添加到自选股';
+
+  @override
+  String get desktopAlreadyInWatchlist => '已在自选股中';
+
+  @override
   String get desktopDayRange => '日内波动';
 
   @override

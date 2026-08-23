@@ -2,6 +2,7 @@ package com.tradex.flashtrade.controller;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -31,7 +32,7 @@ public class AuthController {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
 
-    public AuthController(AuthService authService) {
+    public AuthController(@Qualifier("appAuthService") AuthService authService) {
         this.authService = authService;
     }
 

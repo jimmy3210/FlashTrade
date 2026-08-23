@@ -3,32 +3,27 @@
 -- 包括：订单表增强、订单汇总表、审计日志表
 -- ===================================================
 
--- 1. 增强 orders 表 - 添加管理员相关字段
+-- 1. 增强 orders 表 - 添加管理员相关字段（仅补充 V16/V3 之后未覆盖的字段）
 ALTER TABLE orders
-    ADD COLUMN IF NOT EXISTS broker_account_id BIGINT COMMENT '券商账户ID',
-    ADD COLUMN IF NOT EXISTS order_type VARCHAR(20) COMMENT '订单类型: MARKET/LIMIT/STOP/STOP_LIMIT',
-    ADD COLUMN IF NOT EXISTS limit_price DECIMAL(15,2) COMMENT '限价',
-    ADD COLUMN IF NOT EXISTS filled_quantity INT DEFAULT 0 COMMENT '已成交数量',
-    ADD COLUMN IF NOT EXISTS average_price DECIMAL(10,2) COMMENT '平均成交价',
-    ADD COLUMN IF NOT EXISTS total_value DECIMAL(15,2) COMMENT '订单总价值',
-    ADD COLUMN IF NOT EXISTS commission DECIMAL(10,2) COMMENT '佣金',
-    ADD COLUMN IF NOT EXISTS external_order_id VARCHAR(100) COMMENT '券商订单ID',
-    ADD COLUMN IF NOT EXISTS preview_id VARCHAR(100) COMMENT '订单预览ID',
-    ADD COLUMN IF NOT EXISTS admin_note VARCHAR(500) COMMENT '管理员备注',
-    ADD COLUMN IF NOT EXISTS risk_flag VARCHAR(20) DEFAULT 'NORMAL' COMMENT '风险标记: NORMAL/SUSPICIOUS/BLOCKED/CANCELLED_BY_ADMIN',
-    ADD COLUMN IF NOT EXISTS admin_id BIGINT COMMENT '操作此订单的管理员ID',
-    ADD COLUMN IF NOT EXISTS admin_action_time DATETIME COMMENT '管理员操作时间';
+    ADD COLUMN broker_account_id BIGINT COMMENT '券商账户ID',
+    ADD COLUMN limit_price DECIMAL(15,2) COMMENT '限价',
+    ADD COLUMN filled_quantity INT DEFAULT 0 COMMENT '已成交数量',
+    ADD COLUMN average_price DECIMAL(10,2) COMMENT '平均成交价',
+    ADD COLUMN total_value DECIMAL(15,2) COMMENT '订单总价值',
+    ADD COLUMN commission DECIMAL(10,2) COMMENT '佣金',
+    ADD COLUMN admin_note VARCHAR(500) COMMENT '管理员备注',
+    ADD COLUMN risk_flag VARCHAR(20) DEFAULT 'NORMAL' COMMENT '风险标记: NORMAL/SUSPICIOUS/BLOCKED/CANCELLED_BY_ADMIN',
+    ADD COLUMN admin_id BIGINT COMMENT '操作此订单的管理员ID',
+    ADD COLUMN admin_action_time DATETIME COMMENT '管理员操作时间';
 
--- 为 orders 表创建索引优化查询性能
-CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
-CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
-CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
-CREATE INDEX IF NOT EXISTS idx_orders_risk_flag ON orders(risk_flag);
-CREATE INDEX IF NOT EXISTS idx_orders_broker_account_id ON orders(broker_account_id);
-CREATE INDEX IF NOT EXISTS idx_orders_admin_id ON orders(admin_id);
+-- 为 orders 表创建索引优化查询性能（避免与 V3 / V16 中已有的索引命名与定义重复）
+CREATE INDEX idx_orders_admin_status ON orders(status);
+CREATE INDEX idx_orders_risk_flag ON orders(risk_flag);
+CREATE INDEX idx_orders_broker_account_id ON orders(broker_account_id);
+CREATE INDEX idx_orders_admin_id ON orders(admin_id);
 
 -- 2. 订单每日汇总表 - 用于快速查询统计
-CREATE TABLE IF NOT EXISTS order_daily_summary (
+CREATE TABLE order_daily_summary (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '汇总ID',
     user_id BIGINT NOT NULL COMMENT '用户ID',
     summary_date DATE NOT NULL COMMENT '汇总日期',
@@ -66,7 +61,7 @@ CREATE TABLE IF NOT EXISTS order_daily_summary (
   COMMENT = '订单每日汇总统计表';
 
 -- 3. 操作日志表 - 记录所有管理员操作
-CREATE TABLE IF NOT EXISTS operation_log (
+CREATE TABLE operation_log (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '日志ID',
     
     -- 操作人信息
@@ -107,7 +102,7 @@ CREATE TABLE IF NOT EXISTS operation_log (
   COMMENT = '操作审计日志表';
 
 -- 4. 登录日志表 - 记录所有登录事件
-CREATE TABLE IF NOT EXISTS login_log (
+CREATE TABLE login_log (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '日志ID',
     
     -- 登录用户信息
@@ -144,7 +139,7 @@ CREATE TABLE IF NOT EXISTS login_log (
   COMMENT = '登录审计日志表';
 
 -- 5. API 调用日志表 - 记录关键 API 调用
-CREATE TABLE IF NOT EXISTS api_call_log (
+CREATE TABLE api_call_log (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '日志ID',
     
     -- 用户信息
@@ -184,7 +179,7 @@ CREATE TABLE IF NOT EXISTS api_call_log (
   COMMENT = 'API调用日志表';
 
 -- 6. 系统事件日志表 - 记录系统错误、异常、告警
-CREATE TABLE IF NOT EXISTS system_event_log (
+CREATE TABLE system_event_log (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '日志ID',
     
     -- 事件类型
@@ -222,7 +217,7 @@ CREATE TABLE IF NOT EXISTS system_event_log (
   COMMENT = '系统事件日志表';
 
 -- 7. 日志保留策略表 - 配置不同类型日志的保留时间
-CREATE TABLE IF NOT EXISTS log_retention_policy (
+CREATE TABLE log_retention_policy (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '策略ID',
     log_type VARCHAR(50) NOT NULL COMMENT '日志类型：OPERATION/LOGIN/API_CALL/SYSTEM_EVENT',
     retention_days INT COMMENT '保留天数',

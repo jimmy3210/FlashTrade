@@ -8,7 +8,8 @@ VALUES
     ('SCHWAB', 'MOCK', 'http://localhost:8090/mock/schwab', 1),
     ('TASTYTRADE', 'MOCK', 'http://localhost:8090/mock/tastytrade', 1),
     ('TASTYWORKS', 'MOCK', 'http://localhost:8090/mock/tastyworks', 1)
+AS new_row
 ON DUPLICATE KEY UPDATE
-    mode = VALUES(mode),
-    base_url = VALUES(base_url),
-    mock_enabled = VALUES(mock_enabled);
+    mode = new_row.mode,
+    base_url = new_row.base_url,
+    mock_enabled = new_row.mock_enabled;

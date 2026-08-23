@@ -724,6 +724,18 @@ abstract class AppLocalizations {
   /// **'价格走势图'**
   String get desktopPriceChartPlaceholder;
 
+  /// No description provided for @desktopAddToWatchlist.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加到自选股'**
+  String get desktopAddToWatchlist;
+
+  /// No description provided for @desktopAlreadyInWatchlist.
+  ///
+  /// In zh, this message translates to:
+  /// **'已在自选股中'**
+  String get desktopAlreadyInWatchlist;
+
   /// No description provided for @desktopDayRange.
   ///
   /// In zh, this message translates to:

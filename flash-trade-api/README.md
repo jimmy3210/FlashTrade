@@ -204,6 +204,73 @@ FlashTradeAPI/
 
 ---
 
+## 品牌命名统一说明：Tastytrade（Legacy: Tastyworks）
+
+在项目中，统一使用品牌名 `Tastytrade` 作为对外命名。
+
+原因：
+
+- 现在官方品牌已统一为 `tastytrade`
+- `tastyworks` 是历史遗留名称，仍然会出现在旧 API 域名、历史文档和部分代码字段中
+- 这两者指向同一家公司和同一平台，但为了避免概念混淆，项目内统一采用 `Tastytrade` 作为标准命名
+
+> 注意：底层真实请求地址仍可能使用 `api.cert.tastyworks.com` / `api.tastyworks.com` 这类 legacy 域名，因为这是官方历史 API 入口；因此项目文档中应明确区分：品牌名统一为 `Tastytrade`，而 endpoint 域名可能保留旧值。
+
+---
+
+## 券商环境隔离策略（Sandbox / Production）
+
+本项目遵循统一的券商环境分层原则：每个券商都同时支持两套环境，并通过配置文件或环境变量控制。原则是：
+
+- Sandbox：供测试使用，数据和交易行为均为模拟或测试数据，适合开发和联调。
+- Production：真实交易环境，真实资金和真实订单。
+- 配置层级：环境配置属于部署层，不属于用户数据；因此优先放在 Docker / Spring Cloud Config / 环境变量中，而不是放进数据库。
+
+### 统一规则
+
+对于每个券商，均遵循以下配置模式：
+
+```yaml
+app:
+  <broker>:
+    mock-enabled: true|false
+    base-url: ${BROKER_BASE_URL:https://sandbox-or-production-url}
+```
+
+其中：
+
+- `mock-enabled: true` 表示开发/测试环境，通常返回 Mock 数据或跳过真实鉴权。
+- `mock-enabled: false` 表示真实环境，调用真实券商 API。
+- `base-url` 应根据环境切换到相应地址。
+
+### Tastytrade 参考配置
+
+```yaml
+# 开发 / Sandbox
+app:
+  tastytrade:
+    mock-enabled: true
+    base-url: ${TASTYTRADE_BASE_URL:https://api.cert.tastyworks.com}
+
+# 生产环境
+app:
+  tastytrade:
+    mock-enabled: false
+    base-url: ${TASTYTRADE_BASE_URL:https://api.tastyworks.com}
+```
+
+> 说明：项目内部统一使用 `tastytrade` 命名；真实 API 域名仍可能保留 `api.cert.tastyworks.com` / `api.tastyworks.com`，这是官方历史域名，属于同一平台。
+
+### 其他券商同样适用
+
+- Schwab：开发/测试时使用 Sandbox/Test 地址或 Mock；生产时使用真实地址。
+- E*TRADE：开发/测试时可使用测试环境或 Mock；生产时使用正式 API 地址。
+- Tastyworks：Sandbox = `https://api.cert.tastyworks.com`，Production = `https://api.tastyworks.com`。
+
+> 结论：环境切换是系统级配置，不属于用户表字段；如果未来需要让某个用户绑定“自己使用 Sandbox/Production”，再通过 DB 字段扩展，但默认应由部署配置决定。
+
+---
+
 ## 配置说明
 
 ### 环境变量（生产环境必须设置）

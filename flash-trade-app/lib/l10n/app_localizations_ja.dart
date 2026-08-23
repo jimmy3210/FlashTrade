@@ -331,6 +331,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get desktopPriceChartPlaceholder => '価格チャート';
 
   @override
+  String get desktopAddToWatchlist => 'ウォッチリストに追加';
+
+  @override
+  String get desktopAlreadyInWatchlist => 'ウォッチリストに追加済み';
+
+  @override
   String get desktopDayRange => '日中変動';
 
   @override

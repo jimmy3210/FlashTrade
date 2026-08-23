@@ -331,6 +331,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get desktopPriceChartPlaceholder => 'Price Chart';
 
   @override
+  String get desktopAddToWatchlist => 'Add to watchlist';
+
+  @override
+  String get desktopAlreadyInWatchlist => 'Already in watchlist';
+
+  @override
   String get desktopDayRange => 'Day Range';
 
   @override

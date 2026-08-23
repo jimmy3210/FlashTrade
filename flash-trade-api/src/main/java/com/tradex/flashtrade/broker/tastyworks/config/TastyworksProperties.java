@@ -12,21 +12,21 @@ import org.springframework.stereotype.Component;
  *
  * <pre>
  * app:
- *   tastyworks:
- *     base-url: https://api.tastyworks.com
- *     username: ${TASTYWORKS_USERNAME}
- *     password: ${TASTYWORKS_PASSWORD}
- *     session-cache-key-prefix: tastyworks:session:token
+ *   tastytrade:
+ *     base-url: https://api.cert.tastyworks.com
+ *     username: ${TASTYTRADE_USERNAME}
+ *     password: ${TASTYTRADE_PASSWORD}
+ *     session-cache-key-prefix: tastytrade:session:token
  *     mock-enabled: false
  * </pre>
  */
 @RefreshScope
 @Component
-@ConfigurationProperties(prefix = "app.tastyworks")
+@ConfigurationProperties(prefix = "app.tastytrade")
 public class TastyworksProperties {
 
-    /** Tastyworks REST API 根路径 */
-    private String baseUrl = "https://api.tastyworks.com";
+    /** Tastytrade REST API 根路径（官方 URL 可能仍保留 tastyworks legacy 域名） */
+    private String baseUrl = "https://api.cert.tastyworks.com";
 
     /** 登录用户名 */
     private String username;

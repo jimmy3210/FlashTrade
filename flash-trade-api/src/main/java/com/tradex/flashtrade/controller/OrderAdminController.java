@@ -3,6 +3,7 @@ package com.tradex.flashtrade.controller;
 import java.time.LocalDate;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -43,7 +44,9 @@ import lombok.extern.slf4j.Slf4j;
 public class OrderAdminController {
     
     @Autowired private OrderAdminService orderAdminService;
-    @Autowired private AuthService authService;
+    @Autowired
+    @Qualifier("securityAuthService")
+    private AuthService authService;
     
     /**
      * 获取订单列表

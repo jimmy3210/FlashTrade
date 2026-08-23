@@ -1,6 +1,5 @@
 package com.tradex.flashtrade.security;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -11,7 +10,7 @@ import lombok.extern.slf4j.Slf4j;
  * 认证服务
  * 提供获取当前用户信息的方法
  */
-@Service
+@Service("securityAuthService")
 @Slf4j
 public class AuthService {
     

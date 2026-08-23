@@ -100,49 +100,22 @@ flutter run -d macos
 flutter run -d windows
 ```
 
-### デモモードで起動（バックエンド不要）
+### ローカル開発（Mock / バックエンド連携）
 
-バックエンドなしで UI をすぐに確認できる **デモモード** が組み込まれています。
+本番と同じ経路で動かすことを前提にし、Flutter では **偽データを使わず** Spring Boot バックエンドと連携する構成に統一します。
 
-```bash
-# macOS でデモ起動（推奨）
-flutter run -d macos --dart-define=kDemoMode=true
-
-# その他のプラットフォーム
-flutter run -d ios     --dart-define=kDemoMode=true
-flutter run -d android --dart-define=kDemoMode=true
-flutter run -d windows --dart-define=kDemoMode=true
-```
-
-デモモードは `--dart-define` で制御します。ソースコードの変更は不要です:
+- 実際の API 認証・注文・ポートフォリオ・交易履歴はバックエンドへ送信
+- ローカル検証用にバックエンド側の Mock Broker API を使う
+- デモモードや固定サンプルデータは使用しない
 
 ```bash
-# デモモード（モックデータ使用、API 不要）
-flutter run -d macos --dart-define=kDemoMode=true
-
-# 本番モード（Spring Boot バックエンドへ接続）
+# バックエンド起動後に起動
+flutter run -d windows
+# または
 flutter run -d macos
 ```
 
-**デモログイン:**
-
-アプリ起動後、ログイン画面に表示されるバナーをタップすると資格情報が自動入力されます。
-
-| 項目 | 値 |
-|-----|-----|
-| ユーザー名 | `demo` |
-| パスワード | `demo` |
-
-**デモデータ概要:**
-
-| 画面 | 内容 |
-|-----|------|
-| ホーム | 総資産・AAPL/TSLA 等 Top5 ポジション・7 日間損益グラフ |
-| ポートフォリオ | AAPL / TSLA / NVDA / MSFT / AMZN / GOOGL の 6 銘柄 |
-| 発注 | 注文送信後にモック成功レスポンスを返す（API 通信なし） |
-| 注文履歴 | PENDING / FILLED / CANCELLED 混在の 5 件 + 成約履歴 4 件 |
-
-> 本番モードで起動する場合は `--dart-define=kDemoMode=true` を省略し、Spring Boot バックエンドを起動してください。
+ローカルの Mock Broker API が有効な場合、Flutter 側は `/api/v1/*` の通常 API 経路を使い、券商側の応答はバックエンドの Mock を経由して取得します。
 
 ---
 

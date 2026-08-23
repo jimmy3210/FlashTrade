@@ -102,32 +102,22 @@ flutter run -d windows
 
 ---
 
-## 示例模式（无需后端）
+## 本地开发方式（使用 Mock / 后端真实接口）
 
-应用支持 DEMO 模式，可快速查看 UI 和功能。
-
-```bash
-flutter run -d macos --dart-define=kDemoMode=true
-```
-
-其他平台同理：
+为了避免在系统内保留假数据，前端不再使用 DEMO 模式。所有本地测试均通过 Spring Boot 后端的真实 API 路径访问，后端再由 Mock 券商 API 进行模拟返回。
 
 ```bash
-flutter run -d android --dart-define=kDemoMode=true
+# 先启动后端，然后再运行前端
+flutter run -d windows
+# 或
+flutter run -d macos
 ```
 
-### DEMO 模式说明
+约定：
 
-- 启动后无需后端服务
-- 使用内置模拟数据
-- 订单操作返回模拟成功
-
-### DEMO 登录
-
-| 项目 | 值 |
-|------|----|
-| 用户名 | `demo` |
-| 密码 | `demo` |
+- 前端不再内置 fake data / demo login
+- 订单、持仓、成交、行情都通过 `/api/v1/*` 请求后端
+- 后端使用 Mock Broker API 模拟券商真实返回，而不是在 Flutter 端写死数据
 
 ---
 

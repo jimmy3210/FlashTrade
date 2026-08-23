@@ -16,6 +16,7 @@ import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -66,13 +67,13 @@ public class MarketSchedulerService {
 
     private final Map<String, BrokerClient> brokerMap;
     private final MarketDataService         marketDataService;
-    private final MarketPushService         marketPushService;
+    private final ObjectProvider<MarketPushService> marketPushService;
     private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     public MarketSchedulerService(List<BrokerClient> brokerClients,
                                   BrokerSyncProperties syncProperties,
                                   MarketDataService marketDataService,
-                                  MarketPushService marketPushService,
+                                  ObjectProvider<MarketPushService> marketPushService,
                                   org.springframework.jdbc.core.JdbcTemplate jdbc) {
         this.marketDataService  = marketDataService;
         this.marketPushService  = marketPushService;
@@ -210,7 +211,7 @@ public class MarketSchedulerService {
             for (Map.Entry<String, MarketData> entry : result.entrySet()) {
                 marketDataService.put(entry.getValue());
                 // 同步推送到已订阅的 WebSocket 客户端
-                marketPushService.pushMarketData(entry.getValue());
+                marketPushService.getObject().pushMarketData(entry.getValue());
             }
         }
     }

@@ -109,10 +109,6 @@ resilience4j:
         wait-duration: 1s
         exponential-backoff-multiplier: 2.0
         retry-exceptions:
-        tastytrade:
-          base-url: https://api.tastytrade.com
-          api-key: ""
-          mock-enabled: true
           - com.tradex.flashtrade.exception.BrokerApiException
 
 logging:

@@ -14,20 +14,23 @@ app:
     refresh-expiration-ms: 604800000
 
   schwab:
-    # 开发环境使用 Mock 数据，无需真实 Schwab 账户
+    # 开发环境默认走沙盒/Mock，不连接真实交易环境
     mock-enabled: true
+    base-url: ${SCHWAB_BASE_URL:https://api.schwabapi.com/trader/v1}
 
   etrade:
     # 开发环境使用 Mock 数据，无需真实 E*TRADE 账户
     mock-enabled: true
-    base-url: https://api.etrade.com/v1
-    request-token-url: https://api.etrade.com/oauth/request_token
-    access-token-url: https://api.etrade.com/oauth/access_token
+    base-url: ${ETRADE_BASE_URL:https://api.etrade.com/v1}
+    request-token-url: ${ETRADE_REQUEST_TOKEN_URL:https://api.etrade.com/oauth/request_token}
+    access-token-url: ${ETRADE_ACCESS_TOKEN_URL:https://api.etrade.com/oauth/access_token}
 
-  tastyworks:
-    # 开发环境使用 Mock 数据，无需真实 Tastyworks 账户
+  tastytrade:
+    # 系统内部统一命名为 Tastytrade
+    # 真实域名仍可能保留 legacy URL：https://api.cert.tastyworks.com
+    # 这是同一平台的官方历史接口域名，不是不同券商
     mock-enabled: true
-    base-url: https://api.tastyworks.com
+    base-url: ${TASTYTRADE_BASE_URL:https://api.cert.tastyworks.com}
 
   websocket:
     push-interval-ms: 10000  # 开发环境缩短为 10 秒方便调试

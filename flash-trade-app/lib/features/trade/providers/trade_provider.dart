@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/constants/demo_mode.dart';
 import '../../../core/network/dio_client.dart';
 import '../data/trade_repository.dart';
 import '../domain/trade_form_state.dart';
@@ -24,12 +23,6 @@ class TradeFormNotifier extends StateNotifier<TradeFormState> {
   Future<bool> submitOrder() async {
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
-      // デモモード: API を呼ばずに成功とみなす
-      if (kDemoMode) {
-        await Future.delayed(const Duration(milliseconds: 800));
-        state = const TradeFormState();
-        return true;
-      }
       final repo = _ref.read(tradeRepositoryProvider);
       await repo.placeOrder(
         symbol: state.symbol,

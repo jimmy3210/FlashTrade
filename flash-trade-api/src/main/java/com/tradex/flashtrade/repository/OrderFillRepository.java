@@ -67,7 +67,7 @@ public interface OrderFillRepository extends JpaRepository<OrderFill, Long> {
      */
     @Query("SELECT f FROM OrderFill f " +
             "JOIN Order o ON f.orderId = o.id " +
-            "WHERE o.userId = :userId " +
+            "WHERE o.user.id = :userId " +
             "AND f.filledAt BETWEEN :startTime AND :endTime " +
             "ORDER BY f.filledAt DESC")
     List<OrderFill> findUserTradesInPeriod(Long userId, LocalDateTime startTime, LocalDateTime endTime);
