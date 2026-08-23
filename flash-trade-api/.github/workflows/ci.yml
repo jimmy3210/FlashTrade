@@ -53,7 +53,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           java-version: '21'
-          distribution: 'corretto'
+          distribution: 'microsoft'
           cache: 'maven'
 
       - name: Run tests with coverage
