@@ -12,7 +12,7 @@
   "loginUsername": "Username",
   "loginPassword": "Password",
   "loginButton": "Sign In",
-  "loginDemoHint": "Demo mode: tap to fill demo / demo",
+  "loginDemoHint": "Local testing: use seeded admin account (admin / admin123). Demo autofill removed.",
   "loginErrorEmpty": "Please enter username and password",
   "loginErrorInvalid": "Invalid username or password",
   "loginErrorNetwork": "Please check your network connection",

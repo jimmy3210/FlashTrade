@@ -39,7 +39,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get loginButton => '登录';
 
   @override
-  String get loginDemoHint => '演示模式：点击输入 demo / demo';
+  String get loginDemoHint => '本地测试请使用种子管理员账号：admin / admin123。前端不再提供 Demo 自动填充。';
 
   @override
   String get loginErrorEmpty => '请输入用户名和密码';
@@ -449,7 +449,7 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get loginButton => '登入';
 
   @override
-  String get loginDemoHint => '演示模式：點擊輸入 demo / demo';
+  String get loginDemoHint => '本地測試請使用種子管理員帳號：admin / admin123。前端不再提供 Demo 自動填充。';
 
   @override
   String get loginErrorEmpty => '請輸入使用者名稱和密碼';

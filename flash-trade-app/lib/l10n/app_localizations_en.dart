@@ -39,7 +39,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loginButton => 'Sign In';
 
   @override
-  String get loginDemoHint => 'Demo mode: tap to fill demo / demo';
+  String get loginDemoHint => 'Local testing: use seeded admin account (admin / admin123). Demo autofill removed.';
 
   @override
   String get loginErrorEmpty => 'Please enter username and password';

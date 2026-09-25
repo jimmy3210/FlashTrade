@@ -14,7 +14,7 @@
   "loginUsername": "用户名",
   "loginPassword": "密码",
   "loginButton": "登录",
-  "loginDemoHint": "演示模式：点击输入 demo / demo",
+  "loginDemoHint": "本地测试请使用种子管理员账号：admin / admin123。前端不再提供 Demo 自动填充。",
   "loginErrorEmpty": "请输入用户名和密码",
   "loginErrorInvalid": "用户名或密码错误",
   "loginErrorNetwork": "请检查网络连接",

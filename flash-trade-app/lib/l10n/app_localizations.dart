@@ -164,7 +164,7 @@ abstract class AppLocalizations {
   /// No description provided for @loginDemoHint.
   ///
   /// In zh, this message translates to:
-  /// **'演示模式：点击输入 demo / demo'**
+  /// **'本地测试请使用种子管理员账号：admin / admin123。前端不再提供 Demo 自动填充。'**
   String get loginDemoHint;
 
   /// No description provided for @loginErrorEmpty.

@@ -39,7 +39,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get loginButton => 'ログイン';
 
   @override
-  String get loginDemoHint => 'デモモード：タップして demo / demo を入力';
+  String get loginDemoHint => 'ローカルテストでは組み込みの管理者アカウント (admin / admin123) を使用してください。デモ自動入力は削除されました。';
 
   @override
   String get loginErrorEmpty => 'ユーザー名とパスワードを入力してください';

@@ -14,6 +14,9 @@
           <router-link to="users" class="nav-link">用户管理</router-link>
         </li>
         <li>
+          <router-link to="companies" class="nav-link">公司管理</router-link>
+        </li>
+        <li>
           <router-link to="broker-accounts" class="nav-link">券商账户</router-link>
         </li>
         <li>

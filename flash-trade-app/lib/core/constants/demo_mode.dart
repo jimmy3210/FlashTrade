@@ -1,10 +1,7 @@
-/// 旧デモモード設定。
-/// すべてのローカル開発はバックエンドの Mock / 実券商 API を経由する。
-/// ここに偽データの分岐を残さない。kDemoMode は常に false とする。
-const bool kDemoMode = false;
-
-@Deprecated('Fake demo data is disabled; use backend mock broker APIs instead.')
-const String kDemoUsername = 'demo';
-
-@Deprecated('Fake demo data is disabled; use backend mock broker APIs instead.')
-const String kDemoPassword = 'demo';
+// Demo mode removed.
+// Previous demo constants (kDemoMode / kDemoUsername / kDemoPassword) were removed to avoid
+// retaining any front-end fake data switches. Local testing should use the seeded
+// admin account inserted by Flyway (username: "admin", password: "admin123").
+//
+// If mock broker behavior is needed for local testing, use the back-end mock broker
+// APIs. Do not reintroduce front-end demo-mode flags that embed fake data.

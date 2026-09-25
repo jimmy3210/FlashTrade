@@ -15,6 +15,10 @@ import BrokerAccountView from '@/views/broker-accounts/BrokerAccountView.vue'
 import UserBrokerBinding from '@/views/broker-accounts/UserBrokerBinding.vue'
 import OrderManagement from '@/views/OrderManagement.vue'
 import AuditLogDashboard from '@/views/AuditLogDashboard.vue'
+import CompanyList from '@/views/companies/CompanyList.vue'
+import CompanyCreate from '@/views/companies/CompanyCreate.vue'
+import CompanyEdit from '@/views/companies/CompanyEdit.vue'
+import CompanyView from '@/views/companies/CompanyView.vue'
 
 const routes = [
     {
@@ -41,6 +45,30 @@ const routes = [
                 name: "BrokerConfig",
                 component: BrokerConfig,
                 meta: { title: "券商配置", requiresAuth: true }
+            },
+            {
+                path: 'companies',
+                name: 'CompanyList',
+                component: CompanyList,
+                meta: { title: '公司管理', requiresAuth: true }
+            },
+            {
+                path: 'companies/create',
+                name: 'CompanyCreate',
+                component: CompanyCreate,
+                meta: { title: '新建公司', requiresAuth: true }
+            },
+            {
+                path: 'companies/:id/edit',
+                name: 'CompanyEdit',
+                component: CompanyEdit,
+                meta: { title: '编辑公司', requiresAuth: true }
+            },
+            {
+                path: 'companies/:id/view',
+                name: 'CompanyView',
+                component: CompanyView,
+                meta: { title: '查看公司', requiresAuth: true }
             },
             {
                 path: 'users',

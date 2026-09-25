@@ -12,7 +12,7 @@
   "loginUsername": "ユーザー名",
   "loginPassword": "パスワード",
   "loginButton": "ログイン",
-  "loginDemoHint": "デモモード：タップして demo / demo を入力",
+  "loginDemoHint": "ローカルテストでは組み込みの管理者アカウント (admin / admin123) を使用してください。デモ自動入力は削除されました。",
   "loginErrorEmpty": "ユーザー名とパスワードを入力してください",
   "loginErrorInvalid": "ユーザー名またはパスワードが正しくありません",
   "loginErrorNetwork": "ネットワーク接続を確認してください",
