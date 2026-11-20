@@ -39,6 +39,43 @@ FlashTrade 是一个多券商证券交易平台工程，包含后端 API、Flutt
 - Vite
 - Axios
 
+## Copilot 项目指令与 Prompt
+
+仓库提供 7 个团队共享的 Copilot/VS Code 配置文件：5 个 Markdown 定制文件、1 个 VS Code 工作区设置文件和 1 个扩展推荐文件。
+
+### 项目级指令（1 个）
+
+- [`.github/copilot-instructions.md`](.github/copilot-instructions.md)：Chat 和 Agent 通用的项目约定，包括默认中文回复、系统架构、模块技术栈、代码边界、交易安全与禁用行为、构建和验证命令。
+
+### 局部指令（2 个子文件）
+
+位于 VS Code 支持的 `.github/instructions/`，按 `applyTo` 路径匹配相关文件时应用，并与项目级指令共同生效：
+
+- [flashtrade-backend.instructions.md](.github/instructions/flashtrade-backend.instructions.md)：Java 后端/API、券商适配、认证授权、交易安全、Flyway 迁移与后端测试规范。
+- [flashtrade-frontend.instructions.md](.github/instructions/flashtrade-frontend.instructions.md)：Flutter 客户端与 Vue/TypeScript 管理端的状态管理、路由、API 集成、用户体验和前端测试规范。
+
+### Prompt 模板（2 个子文件）
+
+位于 `.github/prompts/`，在 Copilot Chat 中按需选择调用：
+
+- [generate-unit-tests.prompt.md](.github/prompts/generate-unit-tests.prompt.md)：依据现有项目测试模式生成或完善聚焦的单元测试。
+- [review-code-changes.prompt.md](.github/prompts/review-code-changes.prompt.md)：只读审查改动，关注正确性、安全、交易风险、数据完整性、API 兼容和测试缺口。
+
+### VS Code 工作区配置（2 个文件）
+
+- [`.vscode/settings.json`](.vscode/settings.json)：保留 Java 工作区设置，启用内联建议，并配置 Copilot 在 Markdown 等适用语言中的建议行为。此设置只控制编辑器建议，不代表 Chat/Agent 内容排除或安全隔离。
+- [`.vscode/extensions.json`](.vscode/extensions.json)：推荐 GitHub Copilot、Copilot Chat、Flutter/Dart、Java 和 Vue 扩展。
+
+VS Code 项目级 Copilot 局部指令的受支持格式为 `.github/instructions/*.instructions.md`，不使用示例中的 `.github/copilot-instructions/*.md`。仓库已有 `.github/prompts/` 下的 2 个 Prompt，因此 Copilot Markdown 文件共 5 个，另有 2 个 VS Code 工作区配置文件。
+
+### 敏感内容排除说明
+
+本仓库未添加 `.copilotignore`：VS Code/Copilot 官方支持的项目配置不包括该文件，不能依赖它阻止 Copilot 读取内容。`.gitignore` 用于 Git 忽略，并不等同于 Copilot 内容排除。若需阻止 Copilot Chat、Agent 或代码补全访问敏感路径，应由有权限的仓库/组织管理员在 GitHub Copilot 内容排除设置中配置，并按所用套餐与客户端验证生效；不要把 `.env`、密钥或凭证加入提示词、测试数据或提交内容。
+
+## CI/CD
+
+仓库级 CI 与 GHCR 镜像发布流程见 [CI/CD 流程文档](docs/ci-cd.md)。PR 和 `main`/`develop` 推送会运行后端、Mock、Flutter 与管理端检查；只有全套检查通过的 `vX.Y.Z` 版本标签才会发布 API 镜像到 GHCR。该流程不会自动部署到生产环境，分支保护、Merge Queue 和 Copilot code review 需由仓库管理员在 GitHub 设置中启用。
+
 ## 快速启动
 
 ### 1. 初始化仓库

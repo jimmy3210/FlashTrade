@@ -1,85 +1,144 @@
 <template>
   <div class="form-page">
-    <h2>新建券商账户</h2>
-    <form @submit.prevent="save">
-      <label>所属用户</label>
-      <select v-model.number="form.userId" required>
-        <option :value="null" disabled>请选择用户</option>
-        <option v-for="user in users" :key="user.userId" :value="user.userId">
-          {{ user.username }} (ID: {{ user.userId }})
-        </option>
-      </select>
+    <el-card>
+      <template #header>
+        <div class="card-header">
+          <h2>新建券商账户</h2>
+          <el-button @click="cancel">返回</el-button>
+        </div>
+      </template>
 
-      <label>券商名称</label>
-      <input v-model="form.brokerName" placeholder="schwab / etrade / tastyworks" required />
+      <el-alert
+        title="新账户固定使用 SANDBOX 环境。管理端前端限制不能替代后端环境校验。"
+        type="warning"
+        show-icon
+        :closable="false"
+        class="environment-notice"
+      />
 
-      <label>账户号</label>
-      <input v-model="form.accountNo" placeholder="账户号" required />
+      <el-alert
+        v-if="loadError"
+        :title="loadError"
+        type="error"
+        show-icon
+        :closable="false"
+        class="environment-notice"
+      >
+        <el-button type="primary" plain @click="loadUsers">重试</el-button>
+      </el-alert>
 
-      <label>账户类型</label>
-      <select v-model="form.accountType">
-        <option value="CASH">CASH</option>
-        <option value="MARGIN">MARGIN</option>
-      </select>
-
-      <label>账户状态</label>
-      <select v-model="form.status">
-        <option value="ACTIVE">ACTIVE</option>
-        <option value="SUSPENDED">SUSPENDED</option>
-        <option value="CLOSED">CLOSED</option>
-      </select>
-
-      <label>开发者账号 ID（可选）</label>
-      <input v-model="form.devAccountId" type="number" placeholder="dev account id" />
-
-      <label>API 环境</label>
-      <select v-model="form.apiEnvironment">
-        <option value="LIVE">LIVE</option>
-        <option value="SANDBOX">SANDBOX</option>
-      </select>
-
-      <div class="actions">
-        <button class="primary" type="submit">保存</button>
-        <button type="button" @click="cancel">取消</button>
-      </div>
-    </form>
+      <el-form
+        v-else
+        :model="form"
+        label-width="150px"
+        @submit.prevent="save"
+      >
+        <el-form-item label="所属用户" required>
+          <el-select v-model="form.userId" placeholder="请选择用户" filterable>
+            <el-option
+              v-for="user in users"
+              :key="user.userId"
+              :label="`${user.username} (ID: ${user.userId})`"
+              :value="user.userId"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="券商名称" required>
+          <el-input v-model="form.brokerName" maxlength="64" placeholder="券商标识" />
+        </el-form-item>
+        <el-form-item label="账户号" required>
+          <el-input v-model="form.accountNo" maxlength="128" autocomplete="off" />
+        </el-form-item>
+        <el-form-item label="账户类型">
+          <el-select v-model="form.accountType">
+            <el-option label="现金账户" value="CASH" />
+            <el-option label="保证金账户" value="MARGIN" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="账户状态">
+          <el-select v-model="form.status">
+            <el-option label="启用" value="ACTIVE" />
+            <el-option label="停用" value="SUSPENDED" />
+            <el-option label="关闭" value="CLOSED" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="开发者账号 ID">
+          <el-input-number v-model="form.devAccountId" :min="1" :precision="0" controls-position="right" />
+          <span class="field-hint">可选；留空时不绑定开发者账号</span>
+        </el-form-item>
+        <el-form-item label="API 环境">
+          <el-tag type="success">SANDBOX</el-tag>
+        </el-form-item>
+        <el-form-item>
+          <el-button @click="cancel">取消</el-button>
+          <el-button type="primary" :loading="saving" :disabled="!users.length" @click="save">
+            保存
+          </el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
 
-const router = useRouter()
-const users = ref<any[]>([])
+interface UserOption {
+  userId: number
+  username: string
+}
 
+const router = useRouter()
+const users = ref<UserOption[]>([])
+const loadError = ref('')
+const saving = ref(false)
 const form = ref({
   userId: null as number | null,
   brokerName: '',
   accountNo: '',
   accountType: 'CASH',
   status: 'ACTIVE',
-  devAccountId: null as number | null,
-  apiEnvironment: 'LIVE'
+  devAccountId: null as number | null
 })
 
 const loadUsers = async () => {
-  users.value = await request.get<any[]>('/users')
+  loadError.value = ''
+  try {
+    const result = await request.get<UserOption[]>('/users')
+    if (!Array.isArray(result)) throw new Error('用户列表格式无效')
+    users.value = result
+  } catch (error) {
+    loadError.value = `加载用户列表失败：${String(error)}`
+  }
 }
 
 const save = async () => {
-  const payload = {
-    userId: form.value.userId,
-    brokerName: form.value.brokerName,
-    accountNo: form.value.accountNo,
-    accountType: form.value.accountType,
-    status: form.value.status,
-    devAccountId: form.value.devAccountId ? Number(form.value.devAccountId) : null,
-    apiEnvironment: form.value.apiEnvironment
+  if (saving.value) return
+  const brokerName = form.value.brokerName.trim()
+  const accountNo = form.value.accountNo.trim()
+  if (!form.value.userId || !brokerName || !accountNo) {
+    ElMessage.warning('请完整填写用户、券商名称和账户号')
+    return
   }
-  await request.post('/admin/broker-accounts', payload)
-  router.push({ name: 'BrokerAccountList' })
+
+  saving.value = true
+  try {
+    await request.post('/admin/broker-accounts', {
+      ...form.value,
+      brokerName,
+      accountNo,
+      apiEnvironment: 'SANDBOX'
+    })
+    ElMessage.success('券商账户已创建')
+    await router.push({ name: 'BrokerAccountList' })
+  } catch (error) {
+    ElMessage.warning(`创建请求结果未确认，请先刷新账户列表核对后再提交：${String(error)}`)
+  } finally {
+    saving.value = false
+  }
 }
 
 const cancel = () => router.push({ name: 'BrokerAccountList' })
@@ -89,41 +148,28 @@ onMounted(loadUsers)
 
 <style scoped>
 .form-page {
-  padding: 16px;
-  max-width: 640px;
+  max-width: 760px;
+  margin: 0 auto;
 }
 
-form {
-  display: grid;
-  gap: 16px;
-}
-
-label {
-  font-weight: 600;
-}
-
-input, select {
-  width: 100%;
-  padding: 10px;
-  border: 1px solid #d3d6dd;
-  border-radius: 6px;
-}
-
-.actions {
+.card-header {
   display: flex;
-  gap: 12px;
+  justify-content: space-between;
+  align-items: center;
 }
 
-button.primary {
-  padding: 10px 16px;
-  border: none;
-  border-radius: 6px;
-  background: #42b883;
-  color: #fff;
-  cursor: pointer;
+.card-header h2 {
+  margin: 0;
+  font-size: 18px;
 }
 
-button.primary:hover {
-  background: #369b6f;
+.environment-notice {
+  margin-bottom: 18px;
+}
+
+.field-hint {
+  margin-left: 12px;
+  color: #64748b;
+  font-size: 13px;
 }
 </style>

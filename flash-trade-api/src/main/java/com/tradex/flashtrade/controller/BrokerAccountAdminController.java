@@ -27,7 +27,7 @@ import jakarta.validation.Valid;
 @RequestMapping("/admin/broker-accounts")
 @Tag(name = "券商账户管理", description = "管理员券商账户 CRUD 接口")
 @SecurityRequirement(name = "bearerAuth")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_ADMIN', 'SUPER_ADMIN')")
 public class BrokerAccountAdminController {
 
     private final BrokerAccountService brokerAccountService;
@@ -49,6 +49,7 @@ public class BrokerAccountAdminController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "创建券商账户", description = "新建用户券商交易账户并关联 API 环境")
     public ResponseEntity<ApiResponse<BrokerAccountDto>> createBrokerAccount(
             @Valid @RequestBody BrokerAccountRequest request) {
@@ -56,6 +57,7 @@ public class BrokerAccountAdminController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "更新券商账户", description = "更新券商账户信息和 API 环境配置")
     public ResponseEntity<ApiResponse<BrokerAccountDto>> updateBrokerAccount(
             @PathVariable Long id,
@@ -64,6 +66,7 @@ public class BrokerAccountAdminController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "停用券商账户", description = "将指定券商账户状态标记为 CLOSED")
     public ResponseEntity<ApiResponse<Void>> deleteBrokerAccount(@PathVariable Long id) {
         brokerAccountService.deleteAccount(id);
@@ -77,6 +80,7 @@ public class BrokerAccountAdminController {
     }
 
     @PostMapping("/user/{userId}/bind/{accountId}")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "用户切换/绑定券商账户", description = "为用户设置当前绑定的券商账户（同一账户只能绑定一个用户）")
     public ResponseEntity<ApiResponse<BrokerAccountDto>> setCurrentAccountForUser(
             @PathVariable Long userId,

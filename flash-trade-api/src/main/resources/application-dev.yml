@@ -46,6 +46,9 @@ spring:
 
 # JWT 配置（阶段 3 实装时填写实际密钥）
 app:
+  security:
+    web-auth:
+      refresh-cookie-secure: false
   jwt:
     secret: ${JWT_SECRET:dev-secret-key-change-in-production-must-be-256-bits}
     expiration-ms: 3600000       # 1 小时
@@ -63,7 +66,6 @@ app:
     token-refresh-threshold-seconds: 120
     connect-timeout-ms: 5000
     read-timeout-ms: 15000
-    mock-enabled: true            # 开发环境使用 Mock 数据
   # 券商数据同期设置
   # userId 对应本地数据库 users.id 的值
   # 枚举所有券商与账户 ID 的映射关系
@@ -83,7 +85,7 @@ app:
 
   # CORS 允许来源（逗号分隔）
   cors:
-    allowed-origins: http://localhost:3000,http://localhost:5173
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5174}
 
   # 登录尝试次数限制
   rate-limit:

@@ -28,6 +28,7 @@
   "homeDailyChart": "每日盈亏（历史）",
   "homeNoChartData": "暂无盈亏数据",
   "homeLogout": "退出登录",
+  "logoutServerRevocationUnconfirmed": "已清除本机凭证，但服务器会话撤销未确认。",
   "homeRefresh": "刷新",
 
   "portfolioTitle": "持仓",

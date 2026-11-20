@@ -5,6 +5,7 @@ import java.sql.SQLException;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.OptionalLong;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -15,6 +16,7 @@ import com.tradex.flashtrade.dto.admin.BrokerAccountDto;
 import com.tradex.flashtrade.dto.admin.BrokerAccountRequest;
 import com.tradex.flashtrade.exception.BusinessException;
 import com.tradex.flashtrade.exception.ErrorCode;
+import com.tradex.flashtrade.security.TenantScopeService;
 
 import jakarta.validation.constraints.NotNull;
 
@@ -27,33 +29,32 @@ public class BrokerAccountService {
     private static final List<String> VALID_STATUSES = List.of("ACTIVE", "SUSPENDED", "CLOSED");
 
     private final JdbcTemplate jdbc;
+    private final TenantScopeService tenantScopeService;
 
-    public BrokerAccountService(JdbcTemplate jdbc) {
+    public BrokerAccountService(JdbcTemplate jdbc, TenantScopeService tenantScopeService) {
         this.jdbc = jdbc;
+        this.tenantScopeService = tenantScopeService;
     }
 
     public List<BrokerAccountDto> listAccounts() {
-        String sql = "SELECT a.id, a.user_id, u.username, a.broker_id, b.broker_code, b.broker_name, " +
-                     "a.account_no, a.account_type, a.status, a.dev_account_id, a.api_environment, " +
-                     "u_bind.username AS current_binding_user " +
-                     "FROM t_broker_account a " +
-                     "LEFT JOIN users u ON a.user_id = u.id " +
-                     "LEFT JOIN t_broker b ON a.broker_id = b.id " +
-                     "LEFT JOIN users u_bind ON a.id = u_bind.current_broker_account_id " +
-                     "ORDER BY a.id";
+        OptionalLong companyScope = tenantScopeService.currentCompanyScope();
+        String sql = accountSelect(companyScope.isPresent())
+                + (companyScope.isPresent() ? "WHERE u.company_id = ? " : "")
+                + "ORDER BY a.id";
+        if (companyScope.isPresent()) {
+            return jdbc.query(sql, this::mapRow, companyScope.getAsLong());
+        }
         return jdbc.query(sql, this::mapRow);
     }
 
     public BrokerAccountDto getAccount(@NotNull Long accountId) {
-        String sql = "SELECT a.id, a.user_id, u.username, a.broker_id, b.broker_code, b.broker_name, " +
-                     "a.account_no, a.account_type, a.status, a.dev_account_id, a.api_environment, " +
-                     "u_bind.username AS current_binding_user " +
-                     "FROM t_broker_account a " +
-                     "LEFT JOIN users u ON a.user_id = u.id " +
-                     "LEFT JOIN t_broker b ON a.broker_id = b.id " +
-                     "LEFT JOIN users u_bind ON a.id = u_bind.current_broker_account_id " +
-                     "WHERE a.id = ?";
-        List<BrokerAccountDto> list = jdbc.query(sql, this::mapRow, accountId);
+        OptionalLong companyScope = tenantScopeService.currentCompanyScope();
+        String sql = accountSelect(companyScope.isPresent())
+                + "WHERE a.id = ? "
+                + (companyScope.isPresent() ? "AND u.company_id = ?" : "");
+        List<BrokerAccountDto> list = companyScope.isPresent()
+                ? jdbc.query(sql, this::mapRow, accountId, companyScope.getAsLong())
+                : jdbc.query(sql, this::mapRow, accountId);
         if (list.isEmpty()) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "券商账户不存在: " + accountId);
         }
@@ -62,6 +63,7 @@ public class BrokerAccountService {
 
     @Transactional
     public BrokerAccountDto createAccount(BrokerAccountRequest request) {
+        tenantScopeService.requirePlatformAdmin();
         validateBrokerAccountRequest(request);
         Long brokerId = resolveBrokerId(request.getBrokerName());
         validateUserId(request.getUserId());
@@ -82,6 +84,7 @@ public class BrokerAccountService {
 
     @Transactional
     public BrokerAccountDto updateAccount(Long accountId, BrokerAccountRequest request) {
+        tenantScopeService.requirePlatformAdmin();
         validateBrokerAccountRequest(request);
         BrokerAccountDto existing = getAccount(accountId);
         Long brokerId = resolveBrokerId(request.getBrokerName());
@@ -102,6 +105,7 @@ public class BrokerAccountService {
 
     @Transactional
     public void deleteAccount(Long accountId) {
+        tenantScopeService.requirePlatformAdmin();
         BrokerAccountDto existing = getAccount(accountId);
         if (existing.getStatus() != null && existing.getStatus().equals("CLOSED")) {
             return;
@@ -113,14 +117,17 @@ public class BrokerAccountService {
      * 获取用户当前绑定的券商账户
      */
     public BrokerAccountDto getCurrentAccountForUser(@NotNull Long userId) {
-        validateUserId(userId);
+        OptionalLong companyScope = tenantScopeService.currentCompanyScope();
         String sql = "SELECT a.id, a.user_id, u.username, a.broker_id, b.broker_code, b.broker_name, " +
                      "a.account_no, a.account_type, a.status, a.dev_account_id, a.api_environment " +
                      "FROM t_broker_account a " +
                      "LEFT JOIN users u ON a.user_id = u.id " +
                      "LEFT JOIN t_broker b ON a.broker_id = b.id " +
-                     "WHERE u.id = ? AND u.current_broker_account_id = a.id";
-        List<BrokerAccountDto> list = jdbc.query(sql, this::mapRow, userId);
+                     "WHERE u.id = ? AND u.current_broker_account_id = a.id " +
+                     (companyScope.isPresent() ? "AND u.company_id = ?" : "");
+        List<BrokerAccountDto> list = companyScope.isPresent()
+                ? jdbc.query(sql, this::mapRow, userId, companyScope.getAsLong())
+                : jdbc.query(sql, this::mapRow, userId);
         if (list.isEmpty()) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户未绑定券商账户: " + userId);
         }
@@ -133,6 +140,7 @@ public class BrokerAccountService {
      */
     @Transactional
     public BrokerAccountDto setCurrentAccountForUser(@NotNull Long userId, @NotNull Long accountId) {
+        tenantScopeService.requirePlatformAdmin();
         validateUserId(userId);
         BrokerAccountDto account = getAccount(accountId);
 
@@ -259,6 +267,17 @@ public class BrokerAccountService {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "创建券商账户后未找到记录");
         }
         return list.get(0);
+    }
+
+    private String accountSelect(boolean restrictBindingToOwnerCompany) {
+        return "SELECT a.id, a.user_id, u.username, a.broker_id, b.broker_code, b.broker_name, " +
+               "a.account_no, a.account_type, a.status, a.dev_account_id, a.api_environment, " +
+               "u_bind.username AS current_binding_user " +
+               "FROM t_broker_account a " +
+               "LEFT JOIN users u ON a.user_id = u.id " +
+               "LEFT JOIN t_broker b ON a.broker_id = b.id " +
+               "LEFT JOIN users u_bind ON a.id = u_bind.current_broker_account_id " +
+               (restrictBindingToOwnerCompany ? "AND u_bind.company_id = u.company_id " : "");
     }
 
     @SuppressWarnings("unused")

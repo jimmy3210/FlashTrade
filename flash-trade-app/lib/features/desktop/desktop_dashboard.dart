@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:window_manager/window_manager.dart';
 import '../../core/constants/app_colors.dart';
+import '../auth/presentation/logout_action.dart';
 import '../../features/orders/domain/models.dart';
 import '../../features/orders/providers/orders_provider.dart';
 import '../../features/portfolio/domain/models.dart';
@@ -195,12 +196,7 @@ class _DesktopDashboardState extends ConsumerState<DesktopDashboard> {
       data: (items) => items.any((item) => item.symbol == selectedSymbol),
       orElse: () => false,
     );
-    final estimatedAmount = selectedAsset != null
-        ? NumberFormat.currency(
-            symbol: '\$',
-            decimalDigits: 2,
-          ).format(selectedAsset.currentPrice * 100)
-        : '-';
+    const estimatedAmount = '-';
 
     return Scaffold(
       backgroundColor: AppColors.primaryBg,
@@ -275,17 +271,11 @@ class _DesktopDashboardState extends ConsumerState<DesktopDashboard> {
                       ),
                     ),
                     const Spacer(),
-                    _TopInfoColumn(
-                      label: l10n.desktopMarket,
-                      value: 'Open · 09:30',
-                    ),
+                    _TopInfoColumn(label: l10n.desktopMarket, value: '—'),
                     const _StatusDivider(),
-                    _TopInfoColumn(
-                      label: l10n.desktopBuyingPower,
-                      value: '\$12,345',
-                    ),
+                    _TopInfoColumn(label: l10n.desktopBuyingPower, value: '—'),
                     const _StatusDivider(),
-                    _TopInfoColumn(label: l10n.desktopCash, value: '\$8,900'),
+                    _TopInfoColumn(label: l10n.desktopCash, value: '—'),
                     Flexible(child: SizedBox(width: 200)),
                     IconButton(
                       onPressed: null,
@@ -757,16 +747,17 @@ class _SideBarNavIcon extends StatelessWidget {
   }
 }
 
-class _SideBarLogout extends StatelessWidget {
+class _SideBarLogout extends ConsumerWidget {
   const _SideBarLogout();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final logoutLabel = AppLocalizations.of(context).homeLogout;
     return Tooltip(
-      message: '登出',
+      message: logoutLabel,
       child: InkResponse(
-        onTap: () {
-          context.go('/login');
+        onTap: () async {
+          await logoutAndNavigate(context, ref);
         },
         radius: 30,
         borderRadius: BorderRadius.circular(5),
@@ -778,9 +769,9 @@ class _SideBarLogout extends StatelessWidget {
             children: [
               Icon(Icons.logout, color: AppColors.loss, size: 24),
               const SizedBox(height: 4),
-              const Text(
-                '登出',
-                style: TextStyle(
+              Text(
+                logoutLabel,
+                style: const TextStyle(
                   color: AppColors.loss,
                   fontSize: 9,
                   fontWeight: FontWeight.normal,
@@ -1145,15 +1136,15 @@ class _QuotePanel extends StatelessWidget {
             decimalDigits: 2,
           ).format(asset!.currentPrice)
         : '-';
-    final changeValue = asset?.unrealizedPnlRate ?? 0;
-    final changeText = asset != null
-        ? '${changeValue >= 0 ? '+' : ''}${(changeValue * 100).toStringAsFixed(2)}%'
+    final pnlRate = asset?.unrealizedPnlRate ?? 0;
+    final pnlRateText = asset != null
+        ? '${pnlRate >= 0 ? '+' : ''}${(pnlRate * 100).toStringAsFixed(2)}%'
         : '-';
-    final changeAmount = asset != null
+    final pnlAmountText = asset != null
         ? NumberFormat.currency(
             symbol: '\$',
             decimalDigits: 2,
-          ).format(asset!.currentPrice * asset!.quantity)
+          ).format(asset!.unrealizedPnl)
         : '-';
 
     return Container(
@@ -1187,7 +1178,7 @@ class _QuotePanel extends StatelessWidget {
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              l10n.tradeMarket,
+                              '持仓参考价',
                               style: const TextStyle(
                                 color: AppColors.textSecondary,
                                 fontSize: 12,
@@ -1230,24 +1221,21 @@ class _QuotePanel extends StatelessWidget {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            changeText,
+                          const Text(
+                            '持仓盈亏率',
                             style: TextStyle(
-                              color: changeValue >= 0
+                              color: AppColors.textSecondary,
+                              fontSize: 12,
+                            ),
+                          ),
+                          Text(
+                            pnlRateText,
+                            style: TextStyle(
+                              color: pnlRate >= 0
                                   ? AppColors.gain
                                   : AppColors.loss,
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '($changeText)',
-                            style: TextStyle(
-                              color: changeValue >= 0
-                                  ? AppColors.gain
-                                  : AppColors.loss,
-                              fontSize: 13,
                             ),
                           ),
                         ],
@@ -1258,48 +1246,18 @@ class _QuotePanel extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _StatItem(
-                        label: l10n.desktopBid,
-                        value: asset != null ? price : '-',
-                      ),
-                      _StatItem(
-                        label: l10n.desktopAsk,
-                        value: asset != null ? price : '-',
-                      ),
-                      _StatItem(
-                        label: l10n.desktopSpread,
-                        value: asset != null ? '0.05' : '-',
-                      ),
+                      _StatItem(label: l10n.desktopBid, value: '—'),
+                      _StatItem(label: l10n.desktopAsk, value: '—'),
+                      _StatItem(label: l10n.desktopSpread, value: '—'),
                     ],
                   ),
                   const SizedBox(height: 5),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _StatItem(
-                        label: l10n.desktopVolume,
-                        value: asset != null ? changeAmount : '-',
-                      ),
-                      _StatItem(
-                        label: l10n.desktopAvg10D,
-                        value: asset != null ? '-' : '-',
-                      ),
-                      _StatItem(
-                        label: l10n.desktopPrevClose,
-                        value: asset != null ? price : '-',
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 5),
-                  Row(
-                    children: [
-                      _RangeChip(label: '1D', active: true),
-                      const SizedBox(width: 8),
-                      _RangeChip(label: '5D'),
-                      const SizedBox(width: 8),
-                      _RangeChip(label: '1M'),
-                      const SizedBox(width: 8),
-                      _RangeChip(label: '3M'),
+                      _StatItem(label: '持仓未实现盈亏', value: pnlAmountText),
+                      _StatItem(label: l10n.desktopAvg10D, value: '—'),
+                      _StatItem(label: l10n.desktopPrevClose, value: '—'),
                     ],
                   ),
                   const SizedBox(height: 5),
@@ -1312,23 +1270,13 @@ class _QuotePanel extends StatelessWidget {
                       ),
                       child: Center(
                         child: Text(
-                          l10n.desktopPriceChartPlaceholder,
+                          '行情图表数据尚未接入',
                           style: const TextStyle(
                             color: AppColors.textSecondary,
                           ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 5),
-                  _RangeIndicator(
-                    label: l10n.desktopDayRange,
-                    range: asset != null ? 'N/A' : '-',
-                  ),
-                  const SizedBox(height: 5),
-                  _RangeIndicator(
-                    label: l10n.desktop52WRange,
-                    range: asset != null ? 'N/A' : '-',
                   ),
                 ],
               ),
@@ -1373,94 +1321,6 @@ class _StatItem extends StatelessWidget {
   }
 }
 
-class _RangeChip extends StatelessWidget {
-  const _RangeChip({required this.label, this.active = false});
-
-  final String label;
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 34,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: active ? AppColors.accent : AppColors.secondaryBg,
-        borderRadius: BorderRadius.circular(5),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        label,
-        style: TextStyle(
-          color: active ? AppColors.primaryBg : AppColors.textPrimary,
-          fontWeight: active ? FontWeight.w600 : FontWeight.normal,
-        ),
-      ),
-    );
-  }
-}
-
-class _RangeIndicator extends StatelessWidget {
-  const _RangeIndicator({required this.label, required this.range});
-
-  final String label;
-  final String range;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          range,
-          style: const TextStyle(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          height: 8,
-          decoration: BoxDecoration(
-            color: AppColors.secondaryBg,
-            borderRadius: BorderRadius.circular(5),
-          ),
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.border,
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                ),
-              ),
-              Positioned(
-                left: 48,
-                right: 48,
-                top: 0,
-                bottom: 0,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.accent,
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _TradePanel extends StatelessWidget {
   const _TradePanel({
     required this.symbol,
@@ -1497,16 +1357,6 @@ class _TradePanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 5),
-          Row(
-            children: [
-              Expanded(
-                child: _TradeTypeChip(label: l10n.tradeBuy, active: true),
-              ),
-              const SizedBox(width: 5),
-              Expanded(child: _TradeTypeChip(label: l10n.tradeSell)),
-            ],
-          ),
-          const SizedBox(height: 5),
           _FieldLabel(label: l10n.tradeSymbol),
           const SizedBox(height: 8),
           _InputBox(text: symbol.isEmpty ? l10n.tradeSymbolHint : symbol),
@@ -1518,11 +1368,11 @@ class _TradePanel extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: _FieldWithValue(label: l10n.desktopQty, value: '100'),
+                child: _FieldWithValue(label: l10n.desktopQty, value: '—'),
               ),
               const SizedBox(width: 5),
               Expanded(
-                child: _FieldWithValue(label: l10n.desktopTif, value: 'Day'),
+                child: _FieldWithValue(label: l10n.desktopTif, value: '—'),
               ),
             ],
           ),
@@ -1572,32 +1422,6 @@ class _TradePanel extends StatelessWidget {
             ],
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _TradeTypeChip extends StatelessWidget {
-  const _TradeTypeChip({required this.label, this.active = false});
-
-  final String label;
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 42,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: active ? AppColors.accent : AppColors.secondaryBg,
-        borderRadius: BorderRadius.circular(5),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: active ? AppColors.primaryBg : AppColors.textPrimary,
-          fontWeight: active ? FontWeight.w600 : FontWeight.normal,
-        ),
       ),
     );
   }
@@ -2046,31 +1870,25 @@ class _AccountSummaryPanel extends StatelessWidget {
           (sum, item) => sum + item.unrealizedPnl,
         );
         return {
-          'net': NumberFormat.currency(
+          'marketValue': NumberFormat.currency(
             symbol: '\$',
             decimalDigits: 0,
           ).format(totalValue),
-          'cash': NumberFormat.currency(
-            symbol: '\$',
-            decimalDigits: 0,
-          ).format(totalValue * 0.18),
-          'buying': NumberFormat.currency(
-            symbol: '\$',
-            decimalDigits: 0,
-          ).format(totalValue * 0.22),
-          'daily':
+          'pnl':
               '${totalPnl >= 0 ? '+' : ''}${NumberFormat.currency(symbol: '\$', decimalDigits: 2).format(totalPnl)}',
-          'ytd':
-              '${totalPnl >= 0 ? '+' : ''}${NumberFormat.currency(symbol: '\$', decimalDigits: 2).format(totalPnl * 4)}',
         };
       },
-      orElse: () => {
-        'net': '-'.toString(),
-        'cash': '-'.toString(),
-        'buying': '-'.toString(),
-        'daily': '-'.toString(),
-        'ytd': '-'.toString(),
+      orElse: () => {'marketValue': '—', 'pnl': '—'},
+    );
+    final pnlColor = assetViewAsync.maybeWhen(
+      data: (assets) {
+        final totalPnl = assets.fold(
+          0.0,
+          (sum, item) => sum + item.unrealizedPnl,
+        );
+        return totalPnl >= 0 ? AppColors.gain : AppColors.loss;
       },
+      orElse: () => AppColors.textSecondary,
     );
 
     return Container(
@@ -2094,34 +1912,18 @@ class _AccountSummaryPanel extends StatelessWidget {
             ),
             const SizedBox(height: 5),
             _AccountMetric(
-              label: l10n.desktopNetLiquidation,
-              value: totals['net']!,
+              label: l10n.desktopTotalMarketValue,
+              value: totals['marketValue']!,
             ),
             const SizedBox(height: 5),
-            _AccountMetric(
-              label: l10n.desktopCashBalance,
-              value: totals['cash']!,
-            ),
+            _AccountMetric(label: l10n.desktopCashBalance, value: '—'),
+            const SizedBox(height: 5),
+            _AccountMetric(label: l10n.desktopBuyingPower, value: '—'),
             const SizedBox(height: 5),
             _AccountMetric(
-              label: l10n.desktopBuyingPower,
-              value: totals['buying']!,
-            ),
-            const SizedBox(height: 5),
-            _AccountMetric(
-              label: l10n.homeDailyPnl,
-              value: totals['daily']!,
-              valueColor: totals['daily']!.startsWith('-')
-                  ? AppColors.loss
-                  : AppColors.gain,
-            ),
-            const SizedBox(height: 5),
-            _AccountMetric(
-              label: l10n.desktopYtdPnl,
-              value: totals['ytd']!,
-              valueColor: totals['ytd']!.startsWith('-')
-                  ? AppColors.loss
-                  : AppColors.gain,
+              label: '持仓未实现盈亏',
+              value: totals['pnl']!,
+              valueColor: pnlColor,
             ),
           ],
         ),

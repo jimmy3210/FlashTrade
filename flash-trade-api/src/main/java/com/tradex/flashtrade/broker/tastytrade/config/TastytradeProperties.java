@@ -18,14 +18,9 @@ public class TastytradeProperties {
     /** API Key / 用户凭证（可选） */
     private String apiKey;
 
-    /** 是否启用 Mock 模式（开发） */
-    private boolean mockEnabled = true;
-
     public String getBaseUrl() { return baseUrl; }
     public String getApiKey() { return apiKey; }
-    public boolean isMockEnabled() { return mockEnabled; }
 
     public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
     public void setApiKey(String apiKey) { this.apiKey = apiKey; }
-    public void setMockEnabled(boolean mockEnabled) { this.mockEnabled = mockEnabled; }
 }

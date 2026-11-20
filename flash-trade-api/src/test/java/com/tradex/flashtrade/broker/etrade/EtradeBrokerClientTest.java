@@ -8,7 +8,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import org.mockito.Mock;
 import static org.mockito.Mockito.verify;
@@ -22,6 +21,7 @@ import com.tradex.flashtrade.broker.dto.BrokerTrade;
 import com.tradex.flashtrade.broker.etrade.config.EtradeProperties;
 import com.tradex.flashtrade.broker.etrade.dto.EtradePortfolioResponse;
 import com.tradex.flashtrade.broker.etrade.dto.EtradeTransactionResponse;
+import com.tradex.flashtrade.config.BrokerMode;
 import com.tradex.flashtrade.service.BrokerConfigService;
 
 @ExtendWith(MockitoExtension.class)
@@ -56,9 +56,7 @@ class EtradeBrokerClientTest {
     @Test
     @DisplayName("Mock 模式: getPortfolio 不调用 RestClient，直接返回演示数据")
     void getPortfolio_mockEnabled_returnsMockPortfolio() {
-        when(etradeProps.isMockEnabled()).thenReturn(true);
-        when(brokerConfigService.isMockEnabled(anyString(), anyBoolean()))
-                .thenAnswer(invocation -> invocation.getArgument(1, Boolean.class));
+        when(brokerConfigService.getEffectiveMode(anyString())).thenReturn(BrokerMode.MOCK);
 
         BrokerPortfolio result = client.getPortfolio("account-001");
 
@@ -71,9 +69,7 @@ class EtradeBrokerClientTest {
     @Test
     @DisplayName("Mock 模式: getOrders 不调用 RestClient，直接返回演示数据")
     void getOrders_mockEnabled_returnsMockOrders() {
-        when(etradeProps.isMockEnabled()).thenReturn(true);
-        when(brokerConfigService.isMockEnabled(anyString(), anyBoolean()))
-                .thenAnswer(invocation -> invocation.getArgument(1, Boolean.class));
+        when(brokerConfigService.getEffectiveMode(anyString())).thenReturn(BrokerMode.MOCK);
 
         List<BrokerOrder> result = client.getOrders("account-001");
 
@@ -88,9 +84,7 @@ class EtradeBrokerClientTest {
                 .accountId("account-001")
                 .brokerName("ETRADE")
                 .build();
-        when(etradeProps.isMockEnabled()).thenReturn(false);
-        when(brokerConfigService.isMockEnabled(anyString(), anyBoolean()))
-                .thenAnswer(invocation -> invocation.getArgument(1, Boolean.class));
+        when(brokerConfigService.getEffectiveMode(anyString())).thenReturn(BrokerMode.SANDBOX);
         when(etradeRestClient.getPortfolio(anyString()))
                 .thenReturn(new EtradePortfolioResponse());
         when(etradeMapper.toPortfolio(any(EtradePortfolioResponse.class))).thenReturn(expected);
@@ -105,9 +99,7 @@ class EtradeBrokerClientTest {
     @Test
     @DisplayName("Real 模式: getTrades 会调用 RestClient 和 Mapper")
     void getTrades_realMode_callsRestClientAndMapper() {
-        when(etradeProps.isMockEnabled()).thenReturn(false);
-        when(brokerConfigService.isMockEnabled(anyString(), anyBoolean()))
-                .thenAnswer(invocation -> invocation.getArgument(1, Boolean.class));
+        when(brokerConfigService.getEffectiveMode(anyString())).thenReturn(BrokerMode.SANDBOX);
         when(etradeRestClient.getTransactions(anyString()))
                 .thenReturn(new EtradeTransactionResponse());
         when(etradeMapper.toTrades(any(EtradeTransactionResponse.class)))

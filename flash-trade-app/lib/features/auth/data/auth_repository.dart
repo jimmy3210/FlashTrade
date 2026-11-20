@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import '../../../core/constants/api_constants.dart';
 
 class LoginResponse {
@@ -19,32 +18,21 @@ class AuthRepository {
   final Dio _dio;
 
   Future<LoginResponse> login(String username, String password) async {
-    debugPrint(
-      'AuthRepository.login: url=${ApiConstants.baseUrl}${ApiConstants.login} username=$username passwordLength=${password.length}',
+    final response = await _dio.post(
+      ApiConstants.login,
+      data: {'username': username, 'password': password},
     );
-    try {
-      final response = await _dio.post(
-        ApiConstants.login,
-        data: {'username': username, 'password': password},
-      );
-      debugPrint(
-        'AuthRepository.login success: status=${response.statusCode} data=${response.data}',
-      );
-      final data =
-          (response.data as Map<String, dynamic>)['data']
-              as Map<String, dynamic>?;
-      if (data == null) {
-        throw StateError('Unexpected login response format: ${response.data}');
-      }
-      return LoginResponse.fromJson(data);
-    } on DioException catch (e) {
-      debugPrint(
-        'AuthRepository.login DioException: message=${e.message} status=${e.response?.statusCode} response=${e.response?.data}',
-      );
-      rethrow;
-    } catch (e, st) {
-      debugPrint('AuthRepository.login error: $e\n$st');
-      rethrow;
+    final data = response.data;
+    if (data is! Map<String, dynamic>) {
+      throw StateError('Unexpected login response format');
     }
+    return LoginResponse.fromJson(data);
+  }
+
+  Future<void> logout({String? refreshToken}) async {
+    await _dio.post(
+      ApiConstants.logout,
+      data: refreshToken == null ? null : {'refreshToken': refreshToken},
+    );
   }
 }

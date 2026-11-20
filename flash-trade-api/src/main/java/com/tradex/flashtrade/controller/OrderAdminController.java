@@ -6,7 +6,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -40,7 +39,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequestMapping("/admin/orders")
 @Tag(name = "订单管理", description = "后端管理订单相关接口")
 @Slf4j
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
 public class OrderAdminController {
     
     @Autowired private OrderAdminService orderAdminService;
@@ -144,7 +143,7 @@ public class OrderAdminController {
      * 取消订单
      */
     @DeleteMapping("/{orderId}/cancel")
-    @Operation(summary = "取消订单", description = "管理员取消异常订单（仅对待成交订单有效）")
+    @Operation(summary = "取消订单", description = "券商侧执行结果核验能力完成前拒绝请求")
     public ResponseEntity<ApiResponse<OrderAdminDto>> cancelOrder(
             @Parameter(description = "订单ID")
             @PathVariable Long orderId,
@@ -152,10 +151,7 @@ public class OrderAdminController {
             @RequestBody @Valid CancelOrderRequest request) {
         
         Long adminId = authService.getCurrentUserId();
-        log.warn("⚠️  Admin cancelling order: orderId={}, reason={}, adminId={}", 
-                orderId, request.getReason(), adminId);
-        
         OrderAdminDto result = orderAdminService.cancelOrder(orderId, request, adminId);
-        return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.success(result));
+        return ResponseEntity.ok(ApiResponse.success(result));
     }
 }

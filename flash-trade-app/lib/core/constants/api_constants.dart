@@ -11,6 +11,7 @@ class ApiConstants {
   }
 
   static const String login = '/api/v1/auth/login';
+  static const String logout = '/api/v1/auth/logout';
   static const String refresh = '/api/v1/auth/refresh';
   static const String positions = '/api/v1/portfolio/positions';
   static const String assetView = '/api/v1/portfolio/asset-view';

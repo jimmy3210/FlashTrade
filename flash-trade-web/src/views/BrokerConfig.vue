@@ -1,146 +1,194 @@
 <template>
-  <div class="page">
-    <div class="toolbar">
-      <h2>券商 API 模式与 URL 配置</h2>
-    </div>
+  <div class="broker-config-page">
+    <el-card>
+      <template #header>
+        <div class="card-header">
+          <h2>券商运行配置</h2>
+          <el-button :loading="loading" :disabled="loading" @click="loadConfigs">刷新</el-button>
+        </div>
+      </template>
 
-    <table>
-      <thead>
-        <tr>
-          <th>券商</th>
-          <th>模式</th>
-          <th>Mock</th>
-          <th>API Base URL</th>
-          <th>更新时间</th>
-          <th>操作</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="config in configs" :key="config.brokerName">
-          <td>{{ config.brokerName }}</td>
-          <td>
-            <select v-model="editable[config.brokerName].mode">
-              <option value="PRODUCTION">Production</option>
-              <option value="SANDBOX">Sandbox</option>
-              <option value="MOCK">Mock</option>
-            </select>
-          </td>
-          <td>
-            <input type="checkbox" v-model="editable[config.brokerName].mockEnabled" />
-          </td>
-          <td>
-            <input
-              type="text"
-              v-model="editable[config.brokerName].baseUrl"
-              placeholder="留空使用默认 URL"
-            />
-          </td>
-          <td>{{ config.updatedAt || '-' }}</td>
-          <td>
-            <button class="primary" @click="save(config.brokerName)">保存</button>
-          </td>
-        </tr>
-        <tr v-if="configs.length === 0">
-          <td colspan="6" class="empty">暂无配置数据</td>
-        </tr>
-      </tbody>
-    </table>
+      <el-alert
+        class="readonly-notice"
+        :title="modeNoticeTitle"
+        description="运行模式由后端部署允许集合与有效配置决定；页面只展示服务端返回的模式，不提供模式切换，也不回显 API 地址或凭证。"
+        :type="modeNoticeType"
+        show-icon
+        :closable="false"
+      />
+
+      <div v-if="loadError" class="load-error">
+        <el-alert
+          title="券商配置加载失败"
+          :description="loadError"
+          type="error"
+          show-icon
+          :closable="false"
+        />
+        <el-button type="primary" plain @click="loadConfigs">重试</el-button>
+      </div>
+
+      <el-table
+        v-else
+        v-loading="loading"
+        :data="configs"
+        row-key="brokerName"
+        stripe
+        empty-text="暂无券商配置"
+      >
+        <el-table-column prop="brokerName" label="券商" min-width="130" />
+        <el-table-column label="运行模式" min-width="130">
+          <template #default="{ row }: { row: BrokerConfig }">
+            <el-tag :type="modeTagType(row)">
+              {{ modeLabel(row.mode) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="Mock 状态" width="130">
+          <template #default="{ row }: { row: BrokerConfig }">
+            {{ row.mockEnabled ? '已启用' : '未启用' }}
+          </template>
+        </el-table-column>
+        <el-table-column label="券商 API 请求" min-width="220">
+          <template #default="{ row }: { row: BrokerConfig }">
+            {{ brokerRequestDescription(row) }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="updatedAt" label="配置更新时间" min-width="180">
+          <template #default="{ row }: { row: BrokerConfig }">
+            {{ row.updatedAt || '—' }}
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import request from '@/utils/request'
 
 interface BrokerConfig {
   brokerName: string
   mode: string
-  baseUrl: string | null
   mockEnabled: boolean
   updatedAt: string | null
 }
 
 const configs = ref<BrokerConfig[]>([])
-const editable = reactive<Record<string, Partial<BrokerConfig>>>({})
+const loading = ref(false)
+const loadError = ref('')
+const hasLoaded = ref(false)
 
-const loadConfigs = async () => {
-  const list = await request.get<BrokerConfig[]>('/admin/brokers/configs')
-  configs.value = list || []
-  configs.value.forEach(config => {
-    editable[config.brokerName] = {
-      mode: config.mode || 'PRODUCTION',
-      baseUrl: config.baseUrl || '',
-      mockEnabled: config.mockEnabled
-    }
-  })
+const modeNoticeTitle = computed(() => {
+  if (loadError.value) return '无法确认券商当前运行模式'
+  if (loading.value) return hasLoaded.value ? '正在刷新券商有效模式' : '正在读取券商有效模式'
+  if (!hasLoaded.value || configs.value.length === 0) return '暂无可确认的券商运行模式'
+  if (configs.value.some(config => !isKnownMode(config.mode))) {
+    return '收到未知券商模式，无法确认请求行为'
+  }
+  if (configs.value.some(config => (config.mode === 'MOCK') !== config.mockEnabled)) {
+    return '券商模式与 Mock 标志不一致，请检查服务端配置'
+  }
+  if (configs.value.every(config => config.mode === 'MOCK' && config.mockEnabled)) {
+    return '当前所有券商均使用 Mock，不会调用外部 API。'
+  }
+  return '存在非 Mock 模式；实际外部请求仍由服务端部署策略控制'
+})
+
+const modeNoticeType = computed<'success' | 'warning' | 'error'>(() => {
+  if (loadError.value) return 'error'
+  if (loading.value || !hasLoaded.value || configs.value.length === 0) return 'warning'
+  if (configs.value.some(config => !isKnownMode(config.mode))) return 'error'
+  if (configs.value.some(config => (config.mode === 'MOCK') !== config.mockEnabled)) return 'error'
+  return configs.value.every(config => config.mode === 'MOCK' && config.mockEnabled)
+    ? 'success'
+    : 'warning'
+})
+
+const isKnownMode = (mode: string) => mode === 'MOCK' || mode === 'SANDBOX' || mode === 'PRODUCTION'
+
+const isBrokerConfig = (value: unknown): value is BrokerConfig => {
+  if (typeof value !== 'object' || value === null) return false
+  return 'brokerName' in value
+    && typeof value.brokerName === 'string'
+    && 'mode' in value
+    && typeof value.mode === 'string'
+    && 'mockEnabled' in value
+    && typeof value.mockEnabled === 'boolean'
+    && 'updatedAt' in value
+    && (typeof value.updatedAt === 'string' || value.updatedAt === null)
 }
 
-const save = async (brokerName: string) => {
-  const current = editable[brokerName]
-  if (!current) return
-  await request.put<BrokerConfig>(`/admin/brokers/configs/${brokerName}`, {
-    mode: current.mode,
-    baseUrl: current.baseUrl,
-    mockEnabled: current.mockEnabled
-  })
-  await loadConfigs()
-  alert(`券商 ${brokerName} 配置已保存`)
+const brokerRequestDescription = (config: BrokerConfig) => {
+  if (!isKnownMode(config.mode)) return '未知模式，无法确认请求行为'
+  if ((config.mode === 'MOCK') !== config.mockEnabled) return '模式与 Mock 标志不一致'
+  if (config.mode === 'MOCK') return '本地/隔离 Mock，不发起外部请求'
+  return '非 Mock；请求行为受服务端部署策略控制'
+}
+
+const modeLabel = (mode: string) => {
+  if (isKnownMode(mode)) return mode
+  return '未知模式'
+}
+
+const modeTagType = (config: BrokerConfig) => {
+  if (!isKnownMode(config.mode)) return 'danger'
+  if ((config.mode === 'MOCK') !== config.mockEnabled) return 'danger'
+  return config.mode === 'MOCK' ? 'success' : 'warning'
+}
+
+const loadConfigs = async () => {
+  loading.value = true
+  loadError.value = ''
+  try {
+    const result = await request.get<unknown>('/admin/brokers/configs')
+    if (!Array.isArray(result) || !result.every(isBrokerConfig)) {
+      throw new Error('服务器返回的券商配置格式无效')
+    }
+    configs.value = result
+    hasLoaded.value = true
+  } catch (error: unknown) {
+    loadError.value = error instanceof Error && error.message
+      ? error.message
+      : '请检查连接和管理权限后重试'
+  } finally {
+    loading.value = false
+  }
 }
 
 onMounted(loadConfigs)
 </script>
 
 <style scoped>
-.page {
-  padding: 16px;
+.broker-config-page {
+  min-width: 0;
 }
 
-.toolbar {
-  margin-bottom: 20px;
+.card-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: #fff;
+.card-header h2 {
+  margin: 0;
+  font-size: 18px;
 }
 
-th, td {
-  padding: 10px 12px;
-  border: 1px solid #e6e6e6;
-  text-align: left;
+.readonly-notice,
+.load-error {
+  margin-bottom: 16px;
 }
 
-th {
-  background: #f7f8fb;
+.load-error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
-input[type="text"] {
-  width: 100%;
-  padding: 6px 8px;
-  border: 1px solid #d3d6dd;
-  border-radius: 4px;
-}
-
-button.primary {
-  padding: 6px 12px;
-  border: none;
-  border-radius: 6px;
-  background: #42b883;
-  color: #fff;
-  cursor: pointer;
-}
-
-button.primary:hover {
-  background: #369b6f;
-}
-
-.empty {
-  text-align: center;
-  color: #888;
-  padding: 18px 0;
+.load-error :deep(.el-alert) {
+  flex: 1;
 }
 </style>

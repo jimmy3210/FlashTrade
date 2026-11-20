@@ -20,7 +20,7 @@ import java.util.List;
 @RequestMapping("/api/v1/admin/companies")
 @Tag(name = "公司管理", description = "公司/租户管理接口")
 @SecurityRequirement(name = "bearerAuth")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_ADMIN', 'SUPER_ADMIN')")
 public class CompanyController {
 
     private final CompanyService companyService;
@@ -45,12 +45,14 @@ public class CompanyController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "新增公司", description = "创建公司/租户")
     public ResponseEntity<ApiResponse<CompanyDto>> createCompany(@Valid @RequestBody CompanyCreateRequest request) {
         return ResponseEntity.ok(ApiResponse.success(companyService.createCompany(request)));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "更新公司", description = "修改公司名称或状态")
     public ResponseEntity<ApiResponse<CompanyDto>> updateCompany(@PathVariable Long id,
                                                                @Valid @RequestBody CompanyUpdateRequest request) {
@@ -58,6 +60,7 @@ public class CompanyController {
     }
 
     @PostMapping("/{id}/status")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "切换公司状态", description = "启用/停用公司")
     public ResponseEntity<ApiResponse<Void>> updateCompanyStatus(@PathVariable Long id,
                                                                 @Valid @RequestBody CompanyStatusRequest request) {
@@ -66,6 +69,7 @@ public class CompanyController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "删除公司", description = "删除公司及其关联组")
     public ResponseEntity<ApiResponse<Void>> deleteCompany(@PathVariable Long id) {
         companyService.deleteCompany(id);

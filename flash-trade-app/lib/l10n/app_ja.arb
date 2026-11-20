@@ -26,6 +26,7 @@
   "homeDailyChart": "日次損益（過去履歴）",
   "homeNoChartData": "損益データがありません",
   "homeLogout": "ログアウト",
+  "logoutServerRevocationUnconfirmed": "端末の認証情報は消去しましたが、サーバー側のセッション失効は確認できませんでした。",
   "homeRefresh": "更新",
 
   "portfolioTitle": "ポートフォリオ",

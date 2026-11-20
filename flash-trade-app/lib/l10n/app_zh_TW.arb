@@ -26,6 +26,7 @@
   "homeDailyChart": "每日損益（歷史）",
   "homeNoChartData": "暫無損益資料",
   "homeLogout": "登出",
+  "logoutServerRevocationUnconfirmed": "已清除本機憑證，但伺服器工作階段撤銷未確認。",
   "homeRefresh": "重新整理",
 
   "portfolioTitle": "持倉",

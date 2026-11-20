@@ -15,14 +15,18 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -31,7 +35,10 @@ class AuthServiceTest {
     @Mock private AuthenticationManager  authenticationManager;
     @Mock private JwtTokenProvider        jwtTokenProvider;
     @Mock private TokenBlacklistService   tokenBlacklistService;
+    @Mock private LoginRateLimiterService loginRateLimiter;
     @Mock private UserRepository          userRepository;
+    @Mock private RedisTemplate<String, String> redisTemplate;
+    @Mock private ValueOperations<String, String> valueOperations;
 
     @InjectMocks
     private AuthService authService;
@@ -93,17 +100,23 @@ class AuthServiceTest {
     @DisplayName("刷新 Token 成功：返回新的 Access Token")
     void refreshToken_success() {
         String rt = "valid-refresh-token";
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.setIfAbsent(anyString(), eq("1"), eq(3L), eq(TimeUnit.SECONDS)))
+                .thenReturn(true);
         when(jwtTokenProvider.validateToken(rt)).thenReturn(true);
         when(tokenBlacklistService.isBlacklisted(rt)).thenReturn(false);
         when(jwtTokenProvider.getUsernameFromToken(rt)).thenReturn("trader01");
         when(userRepository.findByUsername("trader01")).thenReturn(Optional.of(testUser));
         when(jwtTokenProvider.generateAccessToken("trader01")).thenReturn("new-access-token");
+        when(jwtTokenProvider.generateRefreshToken("trader01")).thenReturn("new-refresh-token");
         when(jwtTokenProvider.getExpirationMs()).thenReturn(3_600_000L);
+        when(jwtTokenProvider.getRefreshExpirationMs()).thenReturn(604_800_000L);
 
         LoginResponse response = authService.refreshToken(rt);
 
         assertThat(response.getAccessToken()).isEqualTo("new-access-token");
-        assertThat(response.getRefreshToken()).isNull();
+        assertThat(response.getRefreshToken()).isEqualTo("new-refresh-token");
+        verify(tokenBlacklistService).blacklist(rt, 604_800_000L);
     }
 
     @Test
@@ -156,5 +169,60 @@ class AuthServiceTest {
         authService.logout("invalid");
 
         verifyNoInteractions(tokenBlacklistService);
+    }
+
+    @Test
+    @DisplayName("登出：同时撤销匹配用户的 Refresh Token")
+    void logout_validRefreshToken_blacklisted() {
+        String accessToken = "valid-access-token";
+        String refreshToken = "valid-refresh-token";
+        when(jwtTokenProvider.validateToken(accessToken)).thenReturn(true);
+        when(jwtTokenProvider.validateToken(refreshToken)).thenReturn(true);
+        when(jwtTokenProvider.getUsernameFromToken(accessToken)).thenReturn("trader01");
+        when(jwtTokenProvider.getUsernameFromToken(refreshToken)).thenReturn("trader01");
+        when(jwtTokenProvider.getExpirationMs()).thenReturn(3_600_000L);
+        when(jwtTokenProvider.getRefreshExpirationMs()).thenReturn(604_800_000L);
+
+        authService.logout(accessToken, refreshToken);
+
+        verify(tokenBlacklistService).blacklist(accessToken, 3_600_000L);
+        verify(tokenBlacklistService).blacklist(refreshToken, 604_800_000L);
+    }
+
+    @Test
+    @DisplayName("登出：拒绝撤销属于其他用户的 Refresh Token")
+    void logout_refreshTokenBelongsToAnotherUser_denied() {
+        String accessToken = "valid-access-token";
+        String refreshToken = "another-users-refresh-token";
+        when(jwtTokenProvider.validateToken(accessToken)).thenReturn(true);
+        when(jwtTokenProvider.validateToken(refreshToken)).thenReturn(true);
+        when(jwtTokenProvider.getUsernameFromToken(accessToken)).thenReturn("trader01");
+        when(jwtTokenProvider.getUsernameFromToken(refreshToken)).thenReturn("trader02");
+        when(jwtTokenProvider.getExpirationMs()).thenReturn(3_600_000L);
+
+        assertThatThrownBy(() -> authService.logout(accessToken, refreshToken))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e ->
+                    assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(ErrorCode.ACCESS_DENIED));
+
+        verify(tokenBlacklistService).blacklist(accessToken, 3_600_000L);
+        verify(tokenBlacklistService, never()).blacklist(eq(refreshToken), anyLong());
+    }
+
+    @Test
+    @DisplayName("登出：无效 Refresh Token 不影响当前 Access Token 撤销")
+    void logout_invalidRefreshToken_blacklistsAccessToken() {
+        String accessToken = "valid-access-token";
+        String refreshToken = "expired-refresh-token";
+        when(jwtTokenProvider.validateToken(accessToken)).thenReturn(true);
+        when(jwtTokenProvider.validateToken(refreshToken)).thenReturn(false);
+        when(jwtTokenProvider.getUsernameFromToken(accessToken)).thenReturn("trader01");
+        when(jwtTokenProvider.getExpirationMs()).thenReturn(3_600_000L);
+
+        authService.logout(accessToken, refreshToken);
+
+        verify(tokenBlacklistService).blacklist(accessToken, 3_600_000L);
+        verify(tokenBlacklistService, never()).blacklist(eq(refreshToken), anyLong());
     }
 }

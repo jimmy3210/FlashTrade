@@ -78,6 +78,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get homeLogout => 'Logout';
 
   @override
+  String get logoutServerRevocationUnconfirmed =>
+      'Local credentials were cleared, but server session revocation could not be confirmed.';
+
+  @override
   String get homeRefresh => 'Refresh';
 
   @override

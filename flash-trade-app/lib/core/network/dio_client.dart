@@ -12,7 +12,7 @@ class DioClient {
         headers: {'Content-Type': 'application/json'},
       ),
     );
-    _dio.interceptors.add(ApiInterceptor());
+    _dio.interceptors.add(ApiInterceptor(_dio));
   }
 
   static final DioClient _instance = DioClient._internal();

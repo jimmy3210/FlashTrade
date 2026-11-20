@@ -5,7 +5,13 @@ import com.tradex.flashtrade.dto.portfolio.PositionResponse;
 import com.tradex.flashtrade.entity.OrderSide;
 import com.tradex.flashtrade.entity.OrderStatus;
 import com.tradex.flashtrade.exception.GlobalExceptionHandler;
+import com.tradex.flashtrade.config.SecurityConfig;
+import com.tradex.flashtrade.security.JwtTokenProvider;
+import com.tradex.flashtrade.security.UserDetailsServiceImpl;
+import com.tradex.flashtrade.service.PositionAggregatorService;
 import com.tradex.flashtrade.service.PortfolioService;
+import com.tradex.flashtrade.service.TokenBlacklistService;
+import com.tradex.flashtrade.service.UserLookupService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +23,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.security.test.context.support.WithMockUser;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -31,7 +38,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
     value = PortfolioController.class,
     excludeAutoConfiguration = {SecurityAutoConfiguration.class, SecurityFilterAutoConfiguration.class}
 )
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, SecurityConfig.class})
+@WithMockUser(username = "trader01")
 class PortfolioControllerTest {
 
     @Autowired
@@ -39,6 +47,16 @@ class PortfolioControllerTest {
 
     @MockitoBean
     private PortfolioService portfolioService;
+    @MockitoBean
+    private PositionAggregatorService positionAggregatorService;
+    @MockitoBean
+    private UserLookupService userLookupService;
+    @MockitoBean
+    private JwtTokenProvider jwtTokenProvider;
+    @MockitoBean
+    private UserDetailsServiceImpl userDetailsService;
+    @MockitoBean
+    private TokenBlacklistService tokenBlacklistService;
 
     // ============================================================
     // GET /api/portfolio/positions
@@ -60,11 +78,11 @@ class PortfolioControllerTest {
                 .updatedAt(LocalDateTime.now())
                 .build();
 
-        when(portfolioService.getPositions(any())).thenReturn(List.of(pos));
+        when(portfolioService.getPositions(anyString(), isNull(), isNull())).thenReturn(List.of(pos));
 
         mockMvc.perform(get("/api/v1/portfolio/positions"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data[0].symbol").value("AAPL"))
                 .andExpect(jsonPath("$.data[0].quantity").value(100.0000));
     }
@@ -72,11 +90,11 @@ class PortfolioControllerTest {
     @Test
     @DisplayName("GET /api/portfolio/positions - 无持仓时返回空数组")
     void getPositions_emptyList() throws Exception {
-        when(portfolioService.getPositions(any())).thenReturn(List.of());
+        when(portfolioService.getPositions(anyString(), isNull(), isNull())).thenReturn(List.of());
 
         mockMvc.perform(get("/api/v1/portfolio/positions"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data").isEmpty());
     }
 
@@ -104,7 +122,7 @@ class PortfolioControllerTest {
 
         mockMvc.perform(get("/api/v1/orders"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.content[0].symbol").value("AAPL"))
                 .andExpect(jsonPath("$.data.content[0].status").value("FILLED"));
     }

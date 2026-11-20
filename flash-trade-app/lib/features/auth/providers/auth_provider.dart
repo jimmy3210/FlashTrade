@@ -1,8 +1,11 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/storage/secure_storage.dart';
 import '../data/auth_repository.dart';
 import '../domain/auth_state.dart';
+
+enum LogoutResult { completed, serverRevocationUnconfirmed }
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return AuthRepository(DioClient.instance.dio);
@@ -30,9 +33,23 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     });
   }
 
-  Future<void> logout() async {
-    await SecureStorageService.clearTokens();
-    state = const AsyncData(AuthUnauthenticated());
+  Future<LogoutResult> logout() async {
+    var result = LogoutResult.completed;
+    try {
+      final refreshToken = await SecureStorageService.getRefreshToken();
+      await ref
+          .read(authRepositoryProvider)
+          .logout(refreshToken: refreshToken);
+    } on DioException {
+      result = LogoutResult.serverRevocationUnconfirmed;
+    } finally {
+      try {
+        await SecureStorageService.clearTokens();
+      } finally {
+        state = const AsyncData(AuthUnauthenticated());
+      }
+    }
+    return result;
   }
 }
 

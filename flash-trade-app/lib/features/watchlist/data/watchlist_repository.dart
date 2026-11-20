@@ -9,7 +9,7 @@ class WatchlistRepository {
 
   Future<List<WatchlistItem>> getWatchlist() async {
     final response = await _dio.get(ApiConstants.watchlist);
-    final data = response.data['data'] as List<dynamic>;
+    final data = response.data as List<dynamic>;
     return data
         .map((e) => WatchlistItem.fromJson(e as Map<String, dynamic>))
         .toList();

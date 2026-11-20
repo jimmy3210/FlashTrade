@@ -4,9 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/price_text.dart';
 import '../../../shared/widgets/stock_card.dart';
-import '../../auth/providers/auth_provider.dart';
+import '../../auth/presentation/logout_action.dart';
 import '../../portfolio/domain/models.dart';
 import '../../portfolio/providers/portfolio_provider.dart';
 import '../domain/models.dart';
@@ -60,10 +61,9 @@ class HomeScreen extends ConsumerWidget {
           ),
           IconButton(
             icon: const Icon(Icons.logout),
-            tooltip: 'ログアウト',
+            tooltip: AppLocalizations.of(context).homeLogout,
             onPressed: () async {
-              await ref.read(authProvider.notifier).logout();
-              if (context.mounted) context.go('/login');
+              await logoutAndNavigate(context, ref);
             },
           ),
         ],

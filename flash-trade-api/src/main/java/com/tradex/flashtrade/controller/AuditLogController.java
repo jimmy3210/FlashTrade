@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -40,7 +41,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequestMapping("/admin/audit")
 @Tag(name = "审计日志", description = "审计和监控日志查询接口")
 @Slf4j
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
 public class AuditLogController {
     
     @Autowired private OperationLogRepository operationLogRepository;
@@ -67,18 +68,27 @@ public class AuditLogController {
             @RequestParam(required = false) String operation,
             
             @Parameter(description = "目标资源类型（可选）")
-            @RequestParam(required = false) String targetType) {
+            @RequestParam(required = false) String targetType,
+
+            @Parameter(description = "目标资源ID（可选）")
+            @RequestParam(required = false) Long targetId,
+
+            @Parameter(description = "HTTP 结果状态码（可选）")
+            @RequestParam(required = false) Integer httpStatus,
+
+            @Parameter(description = "开始时间（可选，ISO 日期时间）")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
+
+            @Parameter(description = "结束时间（可选，ISO 日期时间）")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime) {
         
-        log.info("📋 Querying operation logs: page={}, operatorId={}, operation={}", 
-                page, operatorId, operation);
+        log.info("Querying operation logs: page={}, operatorId={}, targetType={}, targetId={}",
+                page, operatorId, targetType, targetId);
         
-        Page<OperationLog> logs;
-        if (operatorId != null) {
-            logs = operationLogRepository.findByOperatorId(operatorId, 
-                    PageRequest.of(page - 1, pageSize));
-        } else {
-            logs = operationLogRepository.findAll(PageRequest.of(page - 1, pageSize));
-        }
+        Page<OperationLog> logs = operationLogRepository.search(
+                operatorId, blankToNull(operation), blankToNull(targetType), targetId, httpStatus,
+                startTime, endTime, PageRequest.of(page - 1, pageSize,
+                        Sort.by(Sort.Direction.DESC, "createdAt")));
         
         return ResponseEntity.ok(ApiResponse.success(
             logs.map(this::convertToOperationLogDto)
@@ -104,24 +114,21 @@ public class AuditLogController {
             @RequestParam(required = false) String loginStatus,
             
             @Parameter(description = "请求IP（可选）")
-            @RequestParam(required = false) String requestIp) {
+            @RequestParam(required = false) String requestIp,
+
+            @Parameter(description = "开始时间（可选，ISO 日期时间）")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
+
+            @Parameter(description = "结束时间（可选，ISO 日期时间）")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime) {
         
-        log.info("📋 Querying login logs: page={}, username={}, loginStatus={}", 
-                page, username, loginStatus);
+        log.info("Querying login logs: page={}, username={}, loginStatus={}, requestIp={}",
+                page, username, loginStatus, requestIp);
         
-        Page<LoginLog> logs;
-        if (username != null && !username.isEmpty()) {
-            logs = loginLogRepository.findByUsername(username, 
-                    PageRequest.of(page - 1, pageSize));
-        } else if (loginStatus != null && !loginStatus.isEmpty()) {
-            logs = loginLogRepository.findByLoginStatus(loginStatus, 
-                    PageRequest.of(page - 1, pageSize));
-        } else if (requestIp != null && !requestIp.isEmpty()) {
-            logs = loginLogRepository.findByRequestIp(requestIp, 
-                    PageRequest.of(page - 1, pageSize));
-        } else {
-            logs = loginLogRepository.findAll(PageRequest.of(page - 1, pageSize));
-        }
+        Page<LoginLog> logs = loginLogRepository.search(
+                blankToNull(username), blankToNull(loginStatus), blankToNull(requestIp),
+                startTime, endTime, PageRequest.of(page - 1, pageSize,
+                        Sort.by(Sort.Direction.DESC, "loginTime")));
         
         return ResponseEntity.ok(ApiResponse.success(
             logs.map(this::convertToLoginLogDto)
@@ -145,29 +152,28 @@ public class AuditLogController {
             
             @Parameter(description = "API端点（可选）")
             @RequestParam(required = false) String endpoint,
+
+            @Parameter(description = "HTTP 响应状态码（可选）")
+            @RequestParam(required = false) Integer responseCode,
             
             @Parameter(description = "仅查询关键操作（可选）")
             @RequestParam(required = false) Boolean isCritical,
             
             @Parameter(description = "仅查询错误的调用（可选）")
-            @RequestParam(required = false) Boolean errorFlag) {
+            @RequestParam(required = false) Boolean errorFlag,
+
+            @Parameter(description = "开始时间（可选，ISO 日期时间）")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
+
+            @Parameter(description = "结束时间（可选，ISO 日期时间）")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime) {
         
-        log.info("📋 Querying API call logs: page={}, userId={}, endpoint={}", 
-                page, userId, endpoint);
+        log.info("Querying API call logs: page={}, userId={}, endpoint={}", page, userId, endpoint);
         
-        Page<ApiCallLog> logs;
-        if (userId != null) {
-            logs = apiCallLogRepository.findByUserId(userId, 
-                    PageRequest.of(page - 1, pageSize));
-        } else if (isCritical != null && isCritical) {
-            logs = apiCallLogRepository.findByIsCritical(true, 
-                    PageRequest.of(page - 1, pageSize));
-        } else if (errorFlag != null && errorFlag) {
-            logs = apiCallLogRepository.findByErrorFlag(true, 
-                    PageRequest.of(page - 1, pageSize));
-        } else {
-            logs = apiCallLogRepository.findAll(PageRequest.of(page - 1, pageSize));
-        }
+        Page<ApiCallLog> logs = apiCallLogRepository.search(
+                userId, blankToNull(endpoint), responseCode, isCritical, errorFlag, startTime, endTime,
+                PageRequest.of(page - 1, pageSize,
+                        Sort.by(Sort.Direction.DESC, "createdAt")));
         
         return ResponseEntity.ok(ApiResponse.success(
             logs.map(this::convertToApiCallLogDto)
@@ -196,21 +202,22 @@ public class AuditLogController {
             @RequestParam(required = false) String component,
             
             @Parameter(description = "仅查询未解决的事件（可选）")
-            @RequestParam(required = false) Boolean unresolved) {
+            @RequestParam(required = false) Boolean unresolved,
+
+            @Parameter(description = "开始时间（可选，ISO 日期时间）")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
+
+            @Parameter(description = "结束时间（可选，ISO 日期时间）")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime) {
         
-        log.info("📋 Querying system event logs: page={}, severity={}, component={}", 
-                page, severity, component);
+        log.info("Querying system event logs: page={}, eventType={}, severity={}, component={}",
+                page, eventType, severity, component);
         
-        Page<SystemEventLog> logs;
-        if (severity != null && !severity.isEmpty()) {
-            logs = systemEventLogRepository.findBySeverity(severity, 
-                    PageRequest.of(page - 1, pageSize));
-        } else if (unresolved != null && unresolved) {
-            logs = systemEventLogRepository.findByResolved(false, 
-                    PageRequest.of(page - 1, pageSize));
-        } else {
-            logs = systemEventLogRepository.findAll(PageRequest.of(page - 1, pageSize));
-        }
+        Page<SystemEventLog> logs = systemEventLogRepository.search(
+                blankToNull(eventType), blankToNull(severity), blankToNull(component),
+                Boolean.TRUE.equals(unresolved) ? Boolean.TRUE : null, startTime, endTime,
+                PageRequest.of(page - 1, pageSize,
+                        Sort.by(Sort.Direction.DESC, "createdAt")));
         
         return ResponseEntity.ok(ApiResponse.success(
             logs.map(this::convertToSystemEventLogDto)
@@ -218,6 +225,10 @@ public class AuditLogController {
     }
     
     // 转换方法
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
     
     private OperationLogDto convertToOperationLogDto(OperationLog log) {
         return OperationLogDto.builder()

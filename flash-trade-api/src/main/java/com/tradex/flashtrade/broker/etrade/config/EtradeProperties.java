@@ -40,9 +40,6 @@ public class EtradeProperties {
     /** HTTP 读取超时（毫秒） */
     private int readTimeoutMs = 15000;
 
-    /** 是否启用模拟模式（true 时返回 Mock 数据） */
-    private boolean mockEnabled = false;
-
     // --- Getters & Setters ---
 
     public String getConsumerKey()                     { return consumerKey; }
@@ -69,6 +66,4 @@ public class EtradeProperties {
     public int getReadTimeoutMs()                      { return readTimeoutMs; }
     public void setReadTimeoutMs(int v)                { this.readTimeoutMs = v; }
 
-    public boolean isMockEnabled()                     { return mockEnabled; }
-    public void setMockEnabled(boolean v)              { this.mockEnabled = v; }
 }

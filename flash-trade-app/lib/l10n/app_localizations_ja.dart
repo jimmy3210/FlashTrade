@@ -78,6 +78,10 @@ class AppLocalizationsJa extends AppLocalizations {
   String get homeLogout => 'ログアウト';
 
   @override
+  String get logoutServerRevocationUnconfirmed =>
+      '端末の認証情報は消去しましたが、サーバー側のセッション失効は確認できませんでした。';
+
+  @override
   String get homeRefresh => '更新';
 
   @override

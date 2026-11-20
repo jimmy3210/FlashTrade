@@ -5,19 +5,24 @@ import java.sql.Statement;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.OptionalLong;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
+import com.tradex.flashtrade.audit.AuditLogger;
 import com.tradex.flashtrade.dto.admin.UserAdminDto;
 import com.tradex.flashtrade.dto.admin.UserCreateRequest;
 import com.tradex.flashtrade.exception.BusinessException;
 import com.tradex.flashtrade.exception.ErrorCode;
+import com.tradex.flashtrade.security.TenantScopeService;
 
 import jakarta.validation.constraints.NotNull;
 
@@ -27,34 +32,55 @@ public class AdminUserService {
 
     private final JdbcTemplate jdbc;
     private final PasswordEncoder passwordEncoder;
+    private final TenantScopeService tenantScopeService;
+    private final AuditLogger auditLogger;
 
-    public AdminUserService(JdbcTemplate jdbc, PasswordEncoder passwordEncoder) {
+    public AdminUserService(
+            JdbcTemplate jdbc,
+            PasswordEncoder passwordEncoder,
+            TenantScopeService tenantScopeService,
+            AuditLogger auditLogger) {
         this.jdbc = jdbc;
         this.passwordEncoder = passwordEncoder;
+        this.tenantScopeService = tenantScopeService;
+        this.auditLogger = auditLogger;
     }
 
     public List<UserAdminDto> listUsers() {
+        OptionalLong companyScope = tenantScopeService.currentCompanyScope();
         String sql = "SELECT u.id AS user_id, u.username, u.role, u.enabled, " +
+                     "u.company_id AS company_id, c.name AS company_name, " +
                      "a.account_no AS account_user_id, b.broker_code AS broker_name " +
                      "FROM users u " +
                      "LEFT JOIN t_broker_account a ON a.id = (" +
                      "  SELECT id FROM t_broker_account WHERE user_id = u.id AND status = 'ACTIVE' ORDER BY id LIMIT 1" +
                      ") " +
                      "LEFT JOIN t_broker b ON a.broker_id = b.id " +
+                     "LEFT JOIN t_company c ON c.id = u.company_id " +
+                     (companyScope.isPresent() ? "WHERE u.company_id = ? " : "") +
                      "ORDER BY u.id";
+        if (companyScope.isPresent()) {
+            return jdbc.query(sql, (rs, rowNum) -> mapUserRow(rs), companyScope.getAsLong());
+        }
         return jdbc.query(sql, (rs, rowNum) -> mapUserRow(rs));
     }
 
     public UserAdminDto getUser(@NotNull Long userId) {
+        OptionalLong companyScope = tenantScopeService.currentCompanyScope();
         String sql = "SELECT u.id AS user_id, u.username, u.role, u.enabled, " +
+                     "u.company_id AS company_id, c.name AS company_name, " +
                      "a.account_no AS account_user_id, b.broker_code AS broker_name " +
                      "FROM users u " +
                      "LEFT JOIN t_broker_account a ON a.id = (" +
                      "  SELECT id FROM t_broker_account WHERE user_id = u.id AND status = 'ACTIVE' ORDER BY id LIMIT 1" +
                      ") " +
                      "LEFT JOIN t_broker b ON a.broker_id = b.id " +
-                     "WHERE u.id = ?";
-        List<UserAdminDto> list = jdbc.query(sql, (rs, rowNum) -> mapUserRow(rs), userId);
+                     "LEFT JOIN t_company c ON c.id = u.company_id " +
+                     "WHERE u.id = ? " +
+                     (companyScope.isPresent() ? "AND u.company_id = ?" : "");
+        List<UserAdminDto> list = companyScope.isPresent()
+                ? jdbc.query(sql, (rs, rowNum) -> mapUserRow(rs), userId, companyScope.getAsLong())
+                : jdbc.query(sql, (rs, rowNum) -> mapUserRow(rs), userId);
         if (list.isEmpty()) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在: " + userId);
         }
@@ -63,6 +89,12 @@ public class AdminUserService {
 
     @Transactional
     public UserAdminDto createUser(UserCreateRequest request) {
+        tenantScopeService.requirePlatformAdmin();
+        if (request == null) {
+            throw new BusinessException(ErrorCode.INVALID_ARGUMENT, "请求不能为空");
+        }
+        Long companyId = request.getCompanyId();
+        validateCompanyAssignment(companyId);
         if (existsByUsername(request.getUsername())) {
             throw new BusinessException(ErrorCode.INVALID_ARGUMENT, "用户名已存在: " + request.getUsername());
         }
@@ -76,12 +108,13 @@ public class AdminUserService {
         KeyHolder keyHolder = new GeneratedKeyHolder();
         jdbc.update(con -> {
             PreparedStatement ps = con.prepareStatement(
-                    "INSERT INTO users (username, password_hash, role, enabled, created_at, updated_at) " +
-                    "VALUES (?, ?, ?, 1, NOW(), NOW())",
+                    "INSERT INTO users (username, password_hash, role, company_id, enabled, created_at, updated_at) " +
+                    "VALUES (?, ?, ?, ?, 1, NOW(), NOW())",
                     Statement.RETURN_GENERATED_KEYS);
             ps.setString(1, request.getUsername());
             ps.setString(2, hashed);
             ps.setString(3, "ROLE_TRADER");
+            ps.setLong(4, companyId);
             return ps;
         }, keyHolder);
 
@@ -91,38 +124,81 @@ public class AdminUserService {
         }
         Long userId = key.longValue();
         createOrUpdateBrokerAccount(userId, brokerId, request.getAccountUserId());
-        return getUser(userId);
+        UserAdminDto created = getUser(userId);
+        auditLogger.logOperation(
+                null,
+                currentUsername(),
+                "CREATE_USER_WITH_COMPANY",
+                "USER",
+                userId,
+                created.getUsername(),
+                null,
+                companyId,
+                "创建用户并分配公司 Scope",
+                null,
+                "/users",
+                "POST",
+                201,
+                null);
+        return created;
     }
 
     @Transactional
     public UserAdminDto updateUser(Long userId, UserCreateRequest request) {
+        tenantScopeService.requirePlatformAdmin();
+        if (request == null) {
+            throw new BusinessException(ErrorCode.INVALID_ARGUMENT, "请求不能为空");
+        }
+        Long companyId = request.getCompanyId();
+        validateCompanyAssignment(companyId);
         UserAdminDto existing = getUser(userId);
         Long brokerId = resolveBrokerId(request.getBrokerName());
         boolean enabled = existing.getDeleteFlag() == 0;
 
-        StringBuilder sql = new StringBuilder("UPDATE users SET username = ?, role = ?, enabled = ?, updated_at = NOW()");
+        StringBuilder sql = new StringBuilder(
+                "UPDATE users SET username = ?, company_id = ?, role = ?, enabled = ?, updated_at = NOW()");
         if (request.getPassword() != null && !request.getPassword().isBlank()) {
             sql.append(", password_hash = ?");
         }
         sql.append(" WHERE id = ?");
 
         String username = request.getUsername();
-        String role = "ROLE_TRADER";
+        String role = existing.getRole();
         String password = request.getPassword();
         if (password != null && !password.isBlank()) {
-            Object[] args = new Object[]{username, role, enabled, passwordEncoder.encode(password), userId};
+            Object[] args = new Object[]{
+                    username, companyId, role, enabled, passwordEncoder.encode(password), userId};
             jdbc.update(sql.toString(), args);
         } else {
-            Object[] args = new Object[]{username, role, enabled, userId};
+            Object[] args = new Object[]{username, companyId, role, enabled, userId};
             jdbc.update(sql.toString(), args);
         }
 
         createOrUpdateBrokerAccount(userId, brokerId, request.getAccountUserId());
-        return getUser(userId);
+        UserAdminDto updated = getUser(userId);
+        if (!Objects.equals(existing.getCompanyId(), companyId)) {
+            auditLogger.logOperation(
+                    null,
+                    currentUsername(),
+                    "ASSIGN_USER_COMPANY",
+                    "USER",
+                    userId,
+                    updated.getUsername(),
+                    existing.getCompanyId(),
+                    companyId,
+                    "更新用户公司 Scope",
+                    null,
+                    "/users/" + userId,
+                    "PUT",
+                    200,
+                    null);
+        }
+        return updated;
     }
 
     @Transactional
     public void changePassword(Long userId, String password) {
+        tenantScopeService.requirePlatformAdmin();
         if (password == null || password.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_ARGUMENT, "密码不能为空");
         }
@@ -134,6 +210,19 @@ public class AdminUserService {
 
     @Transactional
     public void setEnabled(Long userId, boolean enabled) {
+        tenantScopeService.requirePlatformAdmin();
+        if (!enabled) {
+            int updated = jdbc.update(
+                    "UPDATE users SET enabled = 0, updated_at = NOW() " +
+                    "WHERE id = ? AND role <> 'ROLE_SUPER_ADMIN'",
+                    userId);
+            if (updated == 1) return;
+            if (!existsByUserId(userId)) {
+                throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在: " + userId);
+            }
+            throw new BusinessException(ErrorCode.INVALID_STATE,
+                    "超级管理员不能通过普通用户状态接口停用");
+        }
         if (!existsByUserId(userId)) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在: " + userId);
         }
@@ -143,6 +232,19 @@ public class AdminUserService {
     private boolean existsByUsername(String username) {
         Integer count = jdbc.queryForObject("SELECT COUNT(1) FROM users WHERE username = ?", Integer.class, username);
         return count != null && count > 0;
+    }
+
+    private void validateCompanyAssignment(Long companyId) {
+        if (companyId == null || companyId <= 0) {
+            throw new BusinessException(ErrorCode.INVALID_ARGUMENT, "必须指定有效的所属公司");
+        }
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(1) FROM t_company WHERE id = ? AND is_active = 1",
+                Integer.class,
+                companyId);
+        if (count == null || count == 0) {
+            throw new BusinessException(ErrorCode.INVALID_ARGUMENT, "所属公司不存在或未启用");
+        }
     }
 
     private boolean existsByUserId(Long userId) {
@@ -172,11 +274,11 @@ public class AdminUserService {
         Integer count = jdbc.queryForObject(
                 "SELECT COUNT(1) FROM t_broker_account WHERE user_id = ?", Integer.class, userId);
         if (count != null && count > 0) {
-            jdbc.update("UPDATE t_broker_account SET broker_id = ?, account_no = ?, status = 'ACTIVE', api_environment = COALESCE(api_environment, 'LIVE') WHERE user_id = ?",
+            jdbc.update("UPDATE t_broker_account SET broker_id = ?, account_no = ?, status = 'ACTIVE', api_environment = COALESCE(api_environment, 'SANDBOX') WHERE user_id = ?",
                     brokerId, accountUserId, userId);
         } else {
             jdbc.update("INSERT INTO t_broker_account (user_id, broker_id, account_no, account_type, status, dev_account_id, api_environment, created_at) " +
-                    "VALUES (?, ?, ?, 'CASH', 'ACTIVE', NULL, 'LIVE', NOW())",
+                    "VALUES (?, ?, ?, 'CASH', 'ACTIVE', NULL, 'SANDBOX', NOW())",
                     userId, brokerId, accountUserId);
         }
     }
@@ -187,8 +289,16 @@ public class AdminUserService {
         dto.setUsername(rs.getString("username"));
         dto.setRole(rs.getString("role"));
         dto.setDeleteFlag(rs.getBoolean("enabled") ? 0 : 1);
+        Number companyId = (Number) rs.getObject("company_id");
+        dto.setCompanyId(companyId == null ? null : companyId.longValue());
+        dto.setCompanyName(rs.getString("company_name"));
         dto.setAccountUserId(rs.getString("account_user_id"));
         dto.setBrokerName(rs.getString("broker_name"));
         return dto;
+    }
+
+    private String currentUsername() {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication == null ? null : authentication.getName();
     }
 }

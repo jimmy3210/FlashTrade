@@ -26,6 +26,7 @@
   "homeDailyChart": "Daily P&L (History)",
   "homeNoChartData": "No P&L data",
   "homeLogout": "Logout",
+  "logoutServerRevocationUnconfirmed": "Local credentials were cleared, but server session revocation could not be confirmed.",
   "homeRefresh": "Refresh",
 
   "portfolioTitle": "Portfolio",

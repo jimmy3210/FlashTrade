@@ -11,7 +11,7 @@ class StockRepository {
       ApiConstants.stockSearch,
       queryParameters: {'query': query},
     );
-    final data = response.data['data'] as List<dynamic>;
+    final data = response.data as List<dynamic>;
     return data
         .map((e) => StockSuggestion.fromJson(e as Map<String, dynamic>))
         .toList();

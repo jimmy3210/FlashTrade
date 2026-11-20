@@ -1,6 +1,8 @@
 package com.tradex.flashtrade.health;
 
 import com.tradex.flashtrade.broker.BrokerClient;
+import com.tradex.flashtrade.config.BrokerMode;
+import com.tradex.flashtrade.service.BrokerConfigService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.actuate.health.Health;
@@ -19,37 +21,41 @@ public abstract class AbstractBrokerHealthIndicator implements HealthIndicator {
 
     private final BrokerClient brokerClient;
     private final String testAccountId;
-    private final boolean mockEnabled;
+    private final BrokerConfigService brokerConfigService;
 
     protected AbstractBrokerHealthIndicator(BrokerClient brokerClient,
                                             String testAccountId,
-                                            boolean mockEnabled) {
+                                            BrokerConfigService brokerConfigService) {
         this.brokerClient  = brokerClient;
         this.testAccountId = testAccountId;
-        this.mockEnabled   = mockEnabled;
+        this.brokerConfigService = brokerConfigService;
     }
 
     @Override
     public Health health() {
         String brokerName = brokerClient.getBrokerName();
-        if (mockEnabled) {
-            return Health.up()
-                    .withDetail("broker", brokerName)
-                    .withDetail("mode", "mock")
-                    .build();
-        }
+        String modeName = "unavailable";
         try {
+            BrokerMode mode = brokerConfigService.getEffectiveMode(brokerName);
+            modeName = mode.name().toLowerCase();
+            if (mode == BrokerMode.MOCK) {
+                return Health.up()
+                        .withDetail("broker", brokerName)
+                        .withDetail("mode", modeName)
+                        .build();
+            }
             brokerClient.getPortfolio(testAccountId);
             return Health.up()
                     .withDetail("broker", brokerName)
-                    .withDetail("mode", "live")
+                    .withDetail("mode", modeName)
                     .build();
-        } catch (Exception e) {
-            log.warn("Health check failed for broker={}: {}", brokerName, e.getMessage());
+        } catch (RuntimeException e) {
+            log.warn("Health check failed for broker={} mode={} errorType={}",
+                    brokerName, modeName, e.getClass().getSimpleName());
             return Health.down()
                     .withDetail("broker", brokerName)
-                    .withDetail("mode", "live")
-                    .withDetail("error", e.getMessage())
+                    .withDetail("mode", modeName)
+                    .withDetail("error", "券商模式或连接健康检查失败")
                     .build();
         }
     }

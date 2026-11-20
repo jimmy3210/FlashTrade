@@ -17,6 +17,12 @@ public class UserAdminDto {
     @Schema(description = "券商名称")
     private String brokerName;
 
+    @Schema(description = "所属公司 ID")
+    private Long companyId;
+
+    @Schema(description = "所属公司名称")
+    private String companyName;
+
     @Schema(description = "用户角色")
     private String role;
 
@@ -36,6 +42,12 @@ public class UserAdminDto {
 
     public String getBrokerName() { return brokerName; }
     public void setBrokerName(String brokerName) { this.brokerName = brokerName; }
+
+    public Long getCompanyId() { return companyId; }
+    public void setCompanyId(Long companyId) { this.companyId = companyId; }
+
+    public String getCompanyName() { return companyName; }
+    public void setCompanyName(String companyName) { this.companyName = companyName; }
 
     public String getRole() { return role; }
     public void setRole(String role) { this.role = role; }

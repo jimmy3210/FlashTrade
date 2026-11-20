@@ -8,6 +8,7 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 /** 下单请求 DTO */
 public class OrderRequest {
@@ -32,6 +33,7 @@ public class OrderRequest {
 
     private String timeInForce = "DAY";   // DAY / GTC / IOC / FOK
 
+    @Size(max = 100, message = "幂等 ID 长度不能超过 100")
     private String clientOrderId;  // 幂等 ID（客户端生成，防重复下单）
 
     public OrderRequest() {}

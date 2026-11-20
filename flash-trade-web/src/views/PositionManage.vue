@@ -1,6 +1,16 @@
 <template>
   <div class="positions-container">
+    <div class="toolbar">
+      <h2>持仓管理</h2>
+      <button type="button" :disabled="loading" @click="fetchPositions">
+        {{ loading ? '加载中...' : '刷新' }}
+      </button>
+    </div>
     <div v-if="loading" class="loading">加载中...</div>
+    <div v-else-if="loadError" class="error-state" role="alert">
+      <span>{{ loadError }}</span>
+      <button type="button" @click="fetchPositions">重试</button>
+    </div>
 
     <div v-else-if="Object.keys(groupedPositions).length === 0">
       <div class="empty-state">暂无仓位数据</div>
@@ -13,14 +23,23 @@
         class="user-block"
       >
         <div class="user-header">
-          <h3 class="user-title" @click="toggleCollapse(userId)">
-            <span
-              class="collapse-icon"
-              :class="{ collapsed: collapsedUsers[userId] }"
+          <h3 class="user-title">
+            <button
+              type="button"
+              class="collapse-button"
+              :aria-expanded="!collapsedUsers[userId]"
+              :aria-label="`${collapsedUsers[userId] ? '展开' : '收起'}用户 ${userId} 的持仓`"
+              @click="toggleCollapse(userId)"
             >
-              ▶
-            </span>
-            用户 {{ userId }}
+              <span
+                class="collapse-icon"
+                :class="{ collapsed: collapsedUsers[userId] }"
+                aria-hidden="true"
+              >
+                ▶
+              </span>
+              用户 {{ userId }}
+            </button>
           </h3>
 
           <div class="user-actions">
@@ -30,18 +49,11 @@
             <span class="summary" :class="profitClass(userSummary[userId]?.marketValue || 0)">
               市值：{{ formatNumber(userSummary[userId]?.marketValue || 0) }}
             </span>
-            <button
-              class="close-btn"
-              :disabled="positions.length === 0 || closingUsers[userId]"
-              @click="closeAllPositions(userId)"
-            >
-              {{ closingUsers[userId] ? '平仓中...' : '一键平仓' }}
-            </button>
           </div>
         </div>
 
         <div class="table-wrapper" v-show="!collapsedUsers[userId]">
-          <table class="position-table">
+          <table class="position-table" aria-label="用户持仓明细">
             <thead>
               <tr>
                 <th>券商</th>
@@ -62,7 +74,7 @@
               </tr>
               <tr v-for="pos in positions" :key="userId + '-' + pos.accountId + '-' + pos.symbol">
                 <td>{{ pos.brokerName }}</td>
-                <td>{{ pos.accountId }}</td>
+                <td>{{ maskAccount(pos.accountId) }}</td>
                 <td>{{ pos.symbol }}</td>
                 <td>{{ pos.direction }}</td>
                 <td>{{ pos.quantity }}</td>
@@ -97,15 +109,45 @@ interface Position {
   updatedAt: string
 }
 
+interface PositionApiRecord {
+  account_id?: string | number | null
+  broker_name?: string | null
+  symbol?: string | null
+  quantity?: number | string | null
+  average_cost?: number | string | null
+  current_price?: number | string | null
+  market_value?: number | string | null
+  unrealized_pnl?: number | string | null
+  updated_at?: string | null
+}
+
 const groupedPositions = ref<Record<string, Position[]>>({})
 const collapsedUsers = reactive<Record<string, boolean>>({})
-const closingUsers = reactive<Record<string, boolean>>({})
 const loading = ref(true)
+const loadError = ref('')
 
 const userSummary = reactive<Record<string, { unrealized: number; marketValue: number }>>({})
+let activeRequestId = 0
 
 const profitClass = (value: number) => (value > 0 ? 'profit' : value < 0 ? 'loss' : '')
-const formatNumber = (value: number) => value.toFixed(2)
+const formatNumber = (value: number) => Number.isFinite(value) ? value.toFixed(2) : '—'
+const maskAccount = (accountId: string) =>
+  accountId.length <= 4 ? '••••' : `${'•'.repeat(Math.min(accountId.length - 4, 8))}${accountId.slice(-4)}`
+const numericValue = (value: number | string | null | undefined) => {
+  const parsed = Number(value ?? 0)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+const errorMessage = (error: unknown) => {
+  if (typeof error === 'object' && error !== null && 'error' in error) {
+    const body = error.error
+    if (typeof body === 'object' && body !== null && 'message' in body && typeof body.message === 'string') {
+      return body.message
+    }
+  }
+  if (error instanceof Error && error.message) return error.message
+  return String(error)
+}
 
 const buildSummary = (userId: string, list: Position[]) => {
   userSummary[userId] = list.reduce(
@@ -118,49 +160,53 @@ const buildSummary = (userId: string, list: Position[]) => {
   )
 }
 
-const normalizePosition = (row: any): Position => ({
-  accountId: String(row.account_id || ''),
-  brokerName: String(row.broker_name || ''),
-  symbol: String(row.symbol || ''),
-  quantity: Number(row.quantity || 0),
-  direction: Number(row.quantity || 0) >= 0 ? '多头' : '空头',
-  averageCost: Number(row.average_cost || 0),
-  currentPrice: Number(row.current_price || 0),
-  marketValue: Number(row.market_value || 0),
-  unrealizedPnl: Number(row.unrealized_pnl || 0),
-  updatedAt: row.updated_at ? String(row.updated_at) : '',
-})
+const normalizePosition = (row: PositionApiRecord): Position => {
+  const quantity = numericValue(row.quantity)
+  return {
+    accountId: String(row.account_id ?? ''),
+    brokerName: String(row.broker_name ?? ''),
+    symbol: String(row.symbol ?? ''),
+    quantity,
+    direction: quantity >= 0 ? '多头' : '空头',
+    averageCost: numericValue(row.average_cost),
+    currentPrice: numericValue(row.current_price),
+    marketValue: numericValue(row.market_value),
+    unrealizedPnl: numericValue(row.unrealized_pnl),
+    updatedAt: row.updated_at ? String(row.updated_at) : ''
+  }
+}
 
 const fetchPositions = async () => {
+  const requestId = ++activeRequestId
   loading.value = true
+  loadError.value = ''
   try {
-    const res = await request.get('/positions')
-    groupedPositions.value = {}
-
-    Object.entries(res || {}).forEach(([userId, rows]) => {
-      groupedPositions.value[userId] = (rows as any[]).map(normalizePosition)
+    const res = await request.get<Record<string, PositionApiRecord[]>>('/positions')
+    if (!res || typeof res !== 'object' || Array.isArray(res)) {
+      throw new Error('服务器返回的持仓数据格式无效')
+    }
+    const nextGrouped: Record<string, Position[]> = {}
+    Object.entries(res).forEach(([userId, rows]) => {
+      if (!Array.isArray(rows)) throw new Error(`用户 ${userId} 的持仓列表格式无效`)
+      nextGrouped[userId] = rows.map(normalizePosition)
       if (!(userId in collapsedUsers)) collapsedUsers[userId] = false
-      if (!(userId in closingUsers)) closingUsers[userId] = false
-      buildSummary(userId, groupedPositions.value[userId])
     })
+    if (requestId === activeRequestId) {
+      Object.keys(userSummary).forEach(userId => {
+        if (!(userId in nextGrouped)) delete userSummary[userId]
+      })
+      Object.entries(nextGrouped).forEach(([userId, positions]) => buildSummary(userId, positions))
+      groupedPositions.value = nextGrouped
+    }
+  } catch (error) {
+    if (requestId === activeRequestId) loadError.value = `加载仓位失败：${errorMessage(error)}`
   } finally {
-    loading.value = false
+    if (requestId === activeRequestId) loading.value = false
   }
 }
 
 const toggleCollapse = (userId: string) => {
   collapsedUsers[userId] = !collapsedUsers[userId]
-}
-
-const closeAllPositions = async (userId: string) => {
-  if (!confirm(`确认平仓 ${userId} 所有仓位？`)) return
-  closingUsers[userId] = true
-  try {
-    await request.post('/positions/close_all', { userId })
-    await fetchPositions()
-  } finally {
-    closingUsers[userId] = false
-  }
 }
 
 onMounted(fetchPositions)
@@ -169,6 +215,42 @@ onMounted(fetchPositions)
 <style scoped>
 .positions-container {
   padding: 16px;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.toolbar h2 {
+  margin: 0;
+}
+
+.toolbar button,
+.error-state button {
+  padding: 8px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.toolbar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.error-state {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
 }
 
 .user-block {
@@ -187,10 +269,24 @@ onMounted(fetchPositions)
 }
 
 .user-title {
-  cursor: pointer;
+  margin: 0;
+}
+
+.collapse-button {
   display: flex;
   align-items: center;
   gap: 6px;
+  padding: 4px 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.collapse-button:focus-visible {
+  outline: 2px solid #42b883;
+  outline-offset: 3px;
 }
 
 .collapse-icon {
@@ -205,20 +301,6 @@ onMounted(fetchPositions)
   display: flex;
   gap: 12px;
   align-items: center;
-}
-
-.close-btn {
-  background: #d32f2f;
-  color: #fff;
-  border: none;
-  padding: 6px 14px;
-  cursor: pointer;
-}
-
-/* 不可用但仍是红色 */
-.close-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .position-table {
@@ -244,7 +326,7 @@ onMounted(fetchPositions)
 
 .table-wrapper {
   max-height: 320px;
-  overflow-y: auto;
+  overflow: auto;
 }
 
 .empty-row {

@@ -5,7 +5,7 @@
         <div class="card-header">
           <span class="title">🔍 审计日志监控</span>
           <div class="header-right">
-            <el-button type="primary" @click="refreshAllTabs">🔄 刷新全部</el-button>
+            <el-button type="primary" :loading="refreshing" @click="refreshAllTabs">🔄 刷新全部</el-button>
           </div>
         </div>
       </template>
@@ -22,21 +22,46 @@
                     v-model.number="operationFilters.operatorId"
                     placeholder="输入操作员ID"
                     clearable
+                    type="number"
                   />
                 </el-form-item>
               </el-col>
               <el-col :xs="24" :sm="12" :md="8">
                 <el-form-item label="操作类型">
-                  <el-input
-                    v-model="operationFilters.operation"
-                    placeholder="如CANCEL_ORDER"
-                    clearable
+                  <el-input v-model="operationFilters.operation" placeholder="输入操作类型" clearable />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="12" :md="8">
+                <el-form-item label="目标类型">
+                  <el-input v-model="operationFilters.targetType" placeholder="输入目标类型" clearable />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="12" :md="8">
+                <el-form-item label="目标ID">
+                  <el-input v-model.number="operationFilters.targetId" placeholder="输入目标ID" clearable type="number" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="12" :md="8">
+                <el-form-item label="结果状态码">
+                  <el-input v-model.number="operationFilters.httpStatus" placeholder="输入 HTTP 状态码" clearable type="number" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="12" :md="8">
+                <el-form-item label="操作时间">
+                  <el-date-picker
+                    v-model="operationFilters.timeRange"
+                    type="datetimerange"
+                    value-format="YYYY-MM-DDTHH:mm:ss"
+                    range-separator="至"
+                    start-placeholder="开始时间"
+                    end-placeholder="结束时间"
+                    class="time-range"
                   />
                 </el-form-item>
               </el-col>
               <el-col :xs="24" :sm="12" :md="8">
                 <el-form-item>
-                  <el-button type="primary" @click="loadOperationLogs">🔍 查询</el-button>
+                  <el-button type="primary" @click="searchOperationLogs">🔍 查询</el-button>
                   <el-button @click="resetOperationFilters">↻ 重置</el-button>
                 </el-form-item>
               </el-col>
@@ -85,7 +110,11 @@
               </el-col>
               <el-col :xs="24" :sm="12" :md="8">
                 <el-form-item label="登录状态">
-                  <el-select v-model="loginFilters.loginStatus" placeholder="选择状态" clearable>
+                  <el-select
+                    v-model="loginFilters.loginStatus"
+                    placeholder="选择状态"
+                    clearable
+                  >
                     <el-option label="全部" value="" />
                     <el-option label="成功" value="SUCCESS" />
                     <el-option label="失败" value="FAILED" />
@@ -93,8 +122,30 @@
                 </el-form-item>
               </el-col>
               <el-col :xs="24" :sm="12" :md="8">
+                <el-form-item label="请求 IP">
+                  <el-input
+                    v-model="loginFilters.requestIp"
+                    placeholder="输入完整 IP"
+                    clearable
+                  />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="12" :md="8">
+                <el-form-item label="登录时间">
+                  <el-date-picker
+                    v-model="loginFilters.timeRange"
+                    type="datetimerange"
+                    value-format="YYYY-MM-DDTHH:mm:ss"
+                    range-separator="至"
+                    start-placeholder="开始时间"
+                    end-placeholder="结束时间"
+                    class="time-range"
+                  />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="12" :md="8">
                 <el-form-item>
-                  <el-button type="primary" @click="loadLoginLogs">🔍 查询</el-button>
+                  <el-button type="primary" @click="searchLoginLogs">🔍 查询</el-button>
                   <el-button @click="resetLoginFilters">↻ 重置</el-button>
                 </el-form-item>
               </el-col>
@@ -142,16 +193,23 @@
                     v-model.number="apiCallFilters.userId"
                     placeholder="输入用户ID"
                     clearable
+                    type="number"
                   />
                 </el-form-item>
               </el-col>
+              <el-col :xs="24" :sm="12" :md="8">
+                <el-form-item label="API 端点">
+                  <el-input v-model="apiCallFilters.endpoint" placeholder="输入完整 API 端点" clearable />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="12" :md="8">
+                <el-form-item label="响应状态码">
+                  <el-input v-model.number="apiCallFilters.responseCode" placeholder="输入 HTTP 状态码" clearable type="number" />
+                </el-form-item>
+              </el-col>
               <el-col :xs="24" :sm="12" :md="6">
-                <el-form-item label="API端点">
-                  <el-input
-                    v-model="apiCallFilters.endpoint"
-                    placeholder="如/admin/orders"
-                    clearable
-                  />
+                <el-form-item label="仅错误调用">
+                  <el-checkbox v-model="apiCallFilters.errorFlag">是</el-checkbox>
                 </el-form-item>
               </el-col>
               <el-col :xs="24" :sm="12" :md="6">
@@ -159,9 +217,23 @@
                   <el-checkbox v-model="apiCallFilters.isCritical">是</el-checkbox>
                 </el-form-item>
               </el-col>
+              <el-col :xs="24" :sm="12" :md="8">
+                <el-form-item label="调用时间">
+                  <el-date-picker
+                    v-model="apiCallFilters.timeRange"
+                    type="datetimerange"
+                    value-format="YYYY-MM-DDTHH:mm:ss"
+                    range-separator="至"
+                    start-placeholder="开始时间"
+                    end-placeholder="结束时间"
+                    class="time-range"
+                  />
+                </el-form-item>
+              </el-col>
               <el-col :xs="24" :sm="12" :md="6">
                 <el-form-item>
-                  <el-button type="primary" @click="loadApiCallLogs">🔍 查询</el-button>
+                  <el-button type="primary" @click="searchApiCallLogs">🔍 查询</el-button>
+                  <el-button @click="resetApiCallFilters">↻ 重置</el-button>
                 </el-form-item>
               </el-col>
             </el-row>
@@ -209,7 +281,11 @@
             <el-row :gutter="20">
               <el-col :xs="24" :sm="12" :md="8">
                 <el-form-item label="严重级别">
-                  <el-select v-model="eventFilters.severity" placeholder="选择级别" clearable>
+                  <el-select
+                    v-model="eventFilters.severity"
+                    placeholder="选择级别"
+                    clearable
+                  >
                     <el-option label="全部" value="" />
                     <el-option label="🔵 低" value="LOW" />
                     <el-option label="🟡 中" value="MEDIUM" />
@@ -220,12 +296,37 @@
               </el-col>
               <el-col :xs="24" :sm="12" :md="8">
                 <el-form-item label="仅未解决">
-                  <el-checkbox v-model="eventFilters.unresolved">是</el-checkbox>
+                  <el-checkbox
+                    v-model="eventFilters.unresolved"
+                  >是</el-checkbox>
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="12" :md="8">
+                <el-form-item label="事件类型">
+                  <el-input v-model="eventFilters.eventType" placeholder="输入事件类型" clearable />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="12" :md="8">
+                <el-form-item label="组件">
+                  <el-input v-model="eventFilters.component" placeholder="输入组件名称" clearable />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="12" :md="8">
+                <el-form-item label="发生时间">
+                  <el-date-picker
+                    v-model="eventFilters.timeRange"
+                    type="datetimerange"
+                    value-format="YYYY-MM-DDTHH:mm:ss"
+                    range-separator="至"
+                    start-placeholder="开始时间"
+                    end-placeholder="结束时间"
+                    class="time-range"
+                  />
                 </el-form-item>
               </el-col>
               <el-col :xs="24" :sm="12" :md="8">
                 <el-form-item>
-                  <el-button type="primary" @click="loadSystemEventLogs">🔍 查询</el-button>
+                  <el-button type="primary" @click="searchSystemEventLogs">🔍 查询</el-button>
                   <el-button @click="resetEventFilters">↻ 重置</el-button>
                 </el-form-item>
               </el-col>
@@ -238,6 +339,8 @@
             style="width: 100%"
             :loading="eventLoading"
           >
+            <el-table-column prop="id" label="事件 ID" width="90" />
+            <el-table-column prop="eventType" label="事件类型" width="150" show-overflow-tooltip />
             <el-table-column prop="severity" label="级别" width="100">
               <template #default="{ row }">
                 <el-tag :type="getSeverityType(row.severity)">
@@ -256,6 +359,11 @@
               </template>
             </el-table-column>
             <el-table-column prop="createdAt" label="时间" width="170" />
+            <el-table-column label="详情" width="90" fixed="right">
+              <template #default="{ row }">
+                <el-button link type="primary" @click="viewSystemEvent(row)">查看</el-button>
+              </template>
+            </el-table-column>
           </el-table>
 
           <el-pagination
@@ -270,47 +378,171 @@
         </el-tab-pane>
       </el-tabs>
     </el-card>
+
+    <el-dialog
+      v-model="eventDetailVisible"
+      title="系统事件详情"
+      width="min(680px, calc(100vw - 32px))"
+    >
+      <el-descriptions v-if="selectedEvent" :column="1" border>
+        <el-descriptions-item label="事件 ID">{{ selectedEvent.id }}</el-descriptions-item>
+        <el-descriptions-item label="事件类型">{{ selectedEvent.eventType || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="严重级别">
+          <el-tag :type="getSeverityType(selectedEvent.severity)">
+            {{ getSeverityLabel(selectedEvent.severity) }}
+          </el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item label="组件">{{ selectedEvent.component || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="事件消息">
+          <div class="event-message">{{ selectedEvent.message }}</div>
+        </el-descriptions-item>
+        <el-descriptions-item label="相关资源">{{ selectedEvent.relatedResource || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="关联用户 ID">{{ selectedEvent.relatedUserId ?? '—' }}</el-descriptions-item>
+        <el-descriptions-item label="关联订单 ID">{{ selectedEvent.relatedOrderId ?? '—' }}</el-descriptions-item>
+        <el-descriptions-item label="发生时间">{{ selectedEvent.createdAt || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="处理状态">
+          {{ selectedEvent.resolved ? '已解决' : '待解决' }}
+        </el-descriptions-item>
+        <el-descriptions-item label="解决时间">{{ selectedEvent.resolvedAt || '—' }}</el-descriptions-item>
+      </el-descriptions>
+      <template #footer>
+        <el-button @click="eventDetailVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { request } from '@/utils/request'
+import request from '@/utils/request'
 
 const activeTab = ref('operations')
+const refreshing = ref(false)
+
+interface OperationLog {
+  id: number
+  operatorUsername: string
+  operation: string
+  targetType?: string
+  targetId?: number | string
+  changeSummary?: string
+  requestIp?: string
+  createdAt?: string
+}
+
+interface LoginLog {
+  username: string
+  loginStatus: string
+  failedReason?: string
+  requestIp?: string
+  loginMethod?: string
+  loginTime?: string
+}
+
+interface ApiCallLog {
+  username?: string
+  httpMethod: string
+  endpoint: string
+  responseCode: number
+  responseTimeMs?: number
+  isCritical: boolean
+  createdAt?: string
+}
+
+interface SystemEventLog {
+  id: number
+  eventType?: string
+  severity: string
+  component?: string
+  message: string
+  relatedUserId?: number
+  relatedOrderId?: number
+  relatedResource?: string
+  resolved: boolean
+  createdAt?: string
+  resolvedAt?: string
+}
 
 // 操作日志
-const operationLogs = ref([])
+const operationLogs = ref<OperationLog[]>([])
 const operationLoading = ref(false)
 const operationPage = ref(1)
 const operationPageSize = ref(20)
 const operationTotal = ref(0)
-const operationFilters = ref({ operatorId: undefined, operation: '' })
+const operationFilters = ref({
+  operatorId: undefined as number | undefined,
+  operation: '',
+  targetType: '',
+  targetId: undefined as number | undefined,
+  httpStatus: undefined as number | undefined,
+  timeRange: [] as string[]
+})
 
 // 登录日志
-const loginLogs = ref([])
+const loginLogs = ref<LoginLog[]>([])
 const loginLoading = ref(false)
 const loginPage = ref(1)
 const loginPageSize = ref(20)
 const loginTotal = ref(0)
-const loginFilters = ref({ username: '', loginStatus: '' })
+const loginFilters = ref({ username: '', loginStatus: '', requestIp: '', timeRange: [] as string[] })
 
 // API 调用日志
-const apiCallLogs = ref([])
+const apiCallLogs = ref<ApiCallLog[]>([])
 const apiCallLoading = ref(false)
 const apiCallPage = ref(1)
 const apiCallPageSize = ref(20)
 const apiCallTotal = ref(0)
-const apiCallFilters = ref({ userId: undefined, endpoint: '', isCritical: false })
+const apiCallFilters = ref<{
+  userId?: number
+  endpoint: string
+  responseCode?: number
+  isCritical: boolean
+  errorFlag: boolean
+  timeRange: string[]
+}>({
+  endpoint: '',
+  isCritical: false,
+  errorFlag: false,
+  timeRange: []
+})
 
 // 系统事件日志
-const systemEventLogs = ref([])
+const systemEventLogs = ref<SystemEventLog[]>([])
 const eventLoading = ref(false)
 const eventPage = ref(1)
 const eventPageSize = ref(20)
 const eventTotal = ref(0)
-const eventFilters = ref({ severity: '', unresolved: false })
+const eventDetailVisible = ref(false)
+const selectedEvent = ref<SystemEventLog | null>(null)
+const eventFilters = ref({
+  severity: '',
+  unresolved: false,
+  eventType: '',
+  component: '',
+  timeRange: [] as string[]
+})
+
+interface PageResponse<T> {
+  content: T[]
+  totalElements: number
+}
+
+const errorMessage = (error: unknown) => {
+  if (typeof error === 'object' && error !== null && 'error' in error) {
+    const body = error.error
+    if (typeof body === 'object' && body !== null && 'message' in body && typeof body.message === 'string') {
+      return body.message
+    }
+  }
+  if (error instanceof Error && error.message) return error.message
+  return String(error)
+}
+
+const timeRangeParams = (range?: string[] | null) => ({
+  startTime: range?.[0] || undefined,
+  endTime: range?.[1] || undefined
+})
 
 // 加载操作日志
 const loadOperationLogs = async () => {
@@ -319,13 +551,20 @@ const loadOperationLogs = async () => {
     const params = {
       page: operationPage.value,
       pageSize: operationPageSize.value,
-      ...operationFilters.value
+      operatorId: operationFilters.value.operatorId || undefined,
+      operation: operationFilters.value.operation.trim() || undefined,
+      targetType: operationFilters.value.targetType.trim() || undefined,
+      targetId: operationFilters.value.targetId || undefined,
+      httpStatus: operationFilters.value.httpStatus || undefined,
+      ...timeRangeParams(operationFilters.value.timeRange)
     }
-    const response = await request.get('/admin/audit/operations', { params })
-    operationLogs.value = response.data.content || []
-    operationTotal.value = response.data.totalElements || 0
+    const response = await request.get<PageResponse<OperationLog>>('/admin/audit/operations', { params })
+    operationLogs.value = response.content || []
+    operationTotal.value = response.totalElements || 0
+    return true
   } catch (error) {
-    ElMessage.error('加载操作日志失败: ' + error)
+    ElMessage.error(`加载操作日志失败：${errorMessage(error)}`)
+    return false
   } finally {
     operationLoading.value = false
   }
@@ -338,13 +577,18 @@ const loadLoginLogs = async () => {
     const params = {
       page: loginPage.value,
       pageSize: loginPageSize.value,
-      ...loginFilters.value
+      username: loginFilters.value.username.trim() || undefined,
+      loginStatus: loginFilters.value.loginStatus || undefined,
+      requestIp: loginFilters.value.requestIp.trim() || undefined,
+      ...timeRangeParams(loginFilters.value.timeRange)
     }
-    const response = await request.get('/admin/audit/logins', { params })
-    loginLogs.value = response.data.content || []
-    loginTotal.value = response.data.totalElements || 0
+    const response = await request.get<PageResponse<LoginLog>>('/admin/audit/logins', { params })
+    loginLogs.value = response.content || []
+    loginTotal.value = response.totalElements || 0
+    return true
   } catch (error) {
-    ElMessage.error('加载登录日志失败: ' + error)
+    ElMessage.error(`加载登录日志失败：${errorMessage(error)}`)
+    return false
   } finally {
     loginLoading.value = false
   }
@@ -358,14 +602,19 @@ const loadApiCallLogs = async () => {
       page: apiCallPage.value,
       pageSize: apiCallPageSize.value,
       userId: apiCallFilters.value.userId || undefined,
-      endpoint: apiCallFilters.value.endpoint || undefined,
-      isCritical: apiCallFilters.value.isCritical || undefined
+      endpoint: apiCallFilters.value.endpoint.trim() || undefined,
+      responseCode: apiCallFilters.value.responseCode || undefined,
+      isCritical: apiCallFilters.value.isCritical || undefined,
+      errorFlag: apiCallFilters.value.errorFlag || undefined,
+      ...timeRangeParams(apiCallFilters.value.timeRange)
     }
-    const response = await request.get('/admin/audit/api-calls', { params })
-    apiCallLogs.value = response.data.content || []
-    apiCallTotal.value = response.data.totalElements || 0
+    const response = await request.get<PageResponse<ApiCallLog>>('/admin/audit/api-calls', { params })
+    apiCallLogs.value = response.content || []
+    apiCallTotal.value = response.totalElements || 0
+    return true
   } catch (error) {
-    ElMessage.error('加载 API 日志失败: ' + error)
+    ElMessage.error(`加载 API 日志失败：${errorMessage(error)}`)
+    return false
   } finally {
     apiCallLoading.value = false
   }
@@ -379,13 +628,18 @@ const loadSystemEventLogs = async () => {
       page: eventPage.value,
       pageSize: eventPageSize.value,
       severity: eventFilters.value.severity || undefined,
-      unresolved: eventFilters.value.unresolved || undefined
+      unresolved: eventFilters.value.unresolved || undefined,
+      eventType: eventFilters.value.eventType.trim() || undefined,
+      component: eventFilters.value.component.trim() || undefined,
+      ...timeRangeParams(eventFilters.value.timeRange)
     }
-    const response = await request.get('/admin/audit/events', { params })
-    systemEventLogs.value = response.data.content || []
-    eventTotal.value = response.data.totalElements || 0
+    const response = await request.get<PageResponse<SystemEventLog>>('/admin/audit/events', { params })
+    systemEventLogs.value = response.content || []
+    eventTotal.value = response.totalElements || 0
+    return true
   } catch (error) {
-    ElMessage.error('加载系统事件日志失败: ' + error)
+    ElMessage.error(`加载系统事件日志失败：${errorMessage(error)}`)
+    return false
   } finally {
     eventLoading.value = false
   }
@@ -410,28 +664,90 @@ const onTabChange = (tab: string) => {
 }
 
 // 重置过滤器
+const searchOperationLogs = () => {
+  operationPage.value = 1
+  loadOperationLogs()
+}
+
+const searchLoginLogs = () => {
+  loginPage.value = 1
+  loadLoginLogs()
+}
+
+const searchApiCallLogs = () => {
+  apiCallPage.value = 1
+  loadApiCallLogs()
+}
+
+const searchSystemEventLogs = () => {
+  eventPage.value = 1
+  loadSystemEventLogs()
+}
+
 const resetOperationFilters = () => {
-  operationFilters.value = { operatorId: undefined, operation: '' }
+  operationFilters.value = {
+    operatorId: undefined,
+    operation: '',
+    targetType: '',
+    targetId: undefined,
+    httpStatus: undefined,
+    timeRange: []
+  }
   operationPage.value = 1
   loadOperationLogs()
 }
 
 const resetLoginFilters = () => {
-  loginFilters.value = { username: '', loginStatus: '' }
+  loginFilters.value = { username: '', loginStatus: '', requestIp: '', timeRange: [] }
   loginPage.value = 1
   loadLoginLogs()
 }
 
 const resetEventFilters = () => {
-  eventFilters.value = { severity: '', unresolved: false }
+  eventFilters.value = {
+    severity: '',
+    unresolved: false,
+    eventType: '',
+    component: '',
+    timeRange: []
+  }
   eventPage.value = 1
   loadSystemEventLogs()
 }
 
+const resetApiCallFilters = () => {
+  apiCallFilters.value = {
+    userId: undefined,
+    endpoint: '',
+    responseCode: undefined,
+    isCritical: false,
+    errorFlag: false,
+    timeRange: []
+  }
+  apiCallPage.value = 1
+  loadApiCallLogs()
+}
+
+const viewSystemEvent = (event: SystemEventLog) => {
+  selectedEvent.value = event
+  eventDetailVisible.value = true
+}
+
 // 刷新所有 Tab
-const refreshAllTabs = () => {
-  onTabChange(activeTab.value)
-  ElMessage.success('✅ 已刷新数据')
+const refreshAllTabs = async () => {
+  if (refreshing.value) return
+  refreshing.value = true
+  try {
+    const results = await Promise.all([
+      loadOperationLogs(),
+      loadLoginLogs(),
+      loadApiCallLogs(),
+      loadSystemEventLogs()
+    ])
+    if (results.every(Boolean)) ElMessage.success('全部审计日志已刷新')
+  } finally {
+    refreshing.value = false
+  }
 }
 
 // 获取严重级别类型
@@ -486,5 +802,16 @@ loadOperationLogs()
   padding: 20px;
   border-radius: 4px;
   margin-bottom: 20px;
+}
+
+.time-range {
+  width: 100%;
+}
+
+.event-message {
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 </style>
