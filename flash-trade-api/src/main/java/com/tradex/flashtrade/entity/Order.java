@@ -82,6 +82,9 @@ public class Order {
     @Column(name = "external_order_id", length = 100)
     private String externalOrderId;
 
+    @Column(name = "client_order_id", length = 100)
+    private String clientOrderId;
+
     @Column(name = "preview_id", length = 100)
     private String previewId;
 
@@ -175,6 +178,9 @@ public class Order {
 
     public String getExternalOrderId() { return externalOrderId; }
     public void setExternalOrderId(String externalOrderId) { this.externalOrderId = externalOrderId; }
+
+    public String getClientOrderId() { return clientOrderId; }
+    public void setClientOrderId(String clientOrderId) { this.clientOrderId = clientOrderId; }
 
     public String getPreviewId() { return previewId; }
     public void setPreviewId(String previewId) { this.previewId = previewId; }

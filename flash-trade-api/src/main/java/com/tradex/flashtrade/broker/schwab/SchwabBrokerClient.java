@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import com.tradex.flashtrade.broker.BrokerClient;
+import com.tradex.flashtrade.config.BrokerMode;
 import com.tradex.flashtrade.broker.dto.BrokerOrder;
 import com.tradex.flashtrade.broker.dto.BrokerPortfolio;
 import com.tradex.flashtrade.broker.dto.BrokerPosition;
@@ -211,7 +212,7 @@ public class SchwabBrokerClient implements BrokerClient {
     }
 
     private boolean isMockEnabled() {
-        return configService.isMockEnabled(BROKER_NAME, props.isMockEnabled());
+        return configService.getEffectiveMode(BROKER_NAME) == BrokerMode.MOCK;
     }
 
     // -------------------------------------------------------------------------

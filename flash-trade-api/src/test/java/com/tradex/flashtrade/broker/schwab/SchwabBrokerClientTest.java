@@ -7,7 +7,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -21,6 +20,7 @@ import com.tradex.flashtrade.broker.dto.BrokerOrder;
 import com.tradex.flashtrade.broker.dto.BrokerPortfolio;
 import com.tradex.flashtrade.broker.dto.BrokerTrade;
 import com.tradex.flashtrade.broker.schwab.config.SchwabProperties;
+import com.tradex.flashtrade.config.BrokerMode;
 import com.tradex.flashtrade.service.BrokerConfigService;
 
 @ExtendWith(MockitoExtension.class)
@@ -43,7 +43,6 @@ class SchwabBrokerClientTest {
         SchwabProperties props = new SchwabProperties();
         props.setClientId("test-client-id");
         props.setClientSecret("test-secret");
-        props.setMockEnabled(false);   // Real モードでテスト
         client = new SchwabBrokerClient(props, schwabRestClient, schwabMapper, brokerConfigService);
     }
 
@@ -61,9 +60,7 @@ class SchwabBrokerClientTest {
     @DisplayName("Mock 模式启用时不调用 RestClient，直接返回 Mock 数据")
     void getPortfolio_mockEnabled_returnsWithoutCallingRestClient() {
         SchwabProperties mockProps = new SchwabProperties();
-        mockProps.setMockEnabled(true);
-        when(brokerConfigService.isMockEnabled(anyString(), anyBoolean()))
-                .thenAnswer(invocation -> invocation.getArgument(1, Boolean.class));
+        when(brokerConfigService.getEffectiveMode(anyString())).thenReturn(BrokerMode.MOCK);
         SchwabBrokerClient mockClient =
                 new SchwabBrokerClient(mockProps, schwabRestClient, schwabMapper, brokerConfigService);
 
@@ -78,9 +75,7 @@ class SchwabBrokerClientTest {
     @DisplayName("Mock 模式: getOrders 返回 MockOrders")
     void getOrders_mockEnabled_returnsMockOrders() {
         SchwabProperties mockProps = new SchwabProperties();
-        mockProps.setMockEnabled(true);
-        when(brokerConfigService.isMockEnabled(anyString(), anyBoolean()))
-                .thenAnswer(invocation -> invocation.getArgument(1, Boolean.class));
+        when(brokerConfigService.getEffectiveMode(anyString())).thenReturn(BrokerMode.MOCK);
         SchwabBrokerClient mockClient =
                 new SchwabBrokerClient(mockProps, schwabRestClient, schwabMapper, brokerConfigService);
 
@@ -102,8 +97,7 @@ class SchwabBrokerClientTest {
                 .accountId("account-001")
                 .brokerName("SCHWAB")
                 .build();
-        when(brokerConfigService.isMockEnabled(anyString(), anyBoolean()))
-                .thenAnswer(invocation -> invocation.getArgument(1, Boolean.class));
+        when(brokerConfigService.getEffectiveMode(anyString())).thenReturn(BrokerMode.SANDBOX);
         when(schwabRestClient.getPositions(anyString())).thenReturn(List.of());
         when(schwabMapper.toPortfolio(anyList(), anyString())).thenReturn(expected);
 
@@ -117,8 +111,7 @@ class SchwabBrokerClientTest {
     @Test
     @DisplayName("Real 模式: getTrades 会调用 RestClient 和 Mapper")
     void getTrades_realMode_callsRestClientAndMapper() {
-        when(brokerConfigService.isMockEnabled(anyString(), anyBoolean()))
-                .thenAnswer(invocation -> invocation.getArgument(1, Boolean.class));
+        when(brokerConfigService.getEffectiveMode(anyString())).thenReturn(BrokerMode.SANDBOX);
         when(schwabRestClient.getTransactions(anyString())).thenReturn(List.of());
         when(schwabMapper.toTrades(anyList())).thenReturn(List.of());
 

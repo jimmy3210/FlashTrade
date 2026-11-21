@@ -88,6 +88,10 @@ cd docker
 docker compose ps
 ```
 
+### 可信代理客户端 IP
+
+API 默认只使用连接对端地址，忽略 `X-Forwarded-For`、`X-Real-IP` 等转发头。部署在反向代理后时，须通过 `APP_SECURITY_TRUSTED_PROXIES` 配置代理的 IP/CIDR（逗号分隔），并确保边缘代理清理外部传入的转发头。只有连接对端属于该可信网络时，API 才会从 `X-Forwarded-For` 代理链右向左解析首个非可信地址；缺失、重复或格式无效的转发链回退到连接对端。未配置代理网络时，登录限流和审计会使用代理对端地址。
+
 ---
 
 ### 初始化应用与数据库迁移（Flyway）

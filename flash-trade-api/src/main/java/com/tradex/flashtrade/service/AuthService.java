@@ -9,6 +9,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import com.tradex.flashtrade.dto.auth.LoginRequest;
 import com.tradex.flashtrade.dto.auth.LoginResponse;
@@ -49,9 +50,6 @@ public class AuthService {
 
     public LoginResponse login(LoginRequest request, String clientIp) {
         String username = request.username();
-        String passwordLength = request.password() == null ? "null" : String.valueOf(request.password().length());
-
-        log.debug("Login attempt received username={} ip={} passwordLength={}", username, clientIp, passwordLength);
 
         loginRateLimiter.checkLocked(clientIp, username);
         try {
@@ -60,12 +58,10 @@ public class AuthService {
             );
         } catch (AuthenticationException e) {
             loginRateLimiter.recordFailure(clientIp, username);
-            log.warn("Login authentication failed username={} ip={} reason={} exception={}",
-                    username, clientIp, e.getClass().getSimpleName(), e.getMessage());
+            log.warn("Login authentication failed reason={}", e.getClass().getSimpleName());
             throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
         }
         loginRateLimiter.resetOnSuccess(clientIp, username);
-        log.info("Login success username={} ip={}", username, clientIp);
 
         String accessToken  = jwtTokenProvider.generateAccessToken(request.username());
         String refreshToken = jwtTokenProvider.generateRefreshToken(request.username());
@@ -104,8 +100,10 @@ public class AuthService {
             tokenBlacklistService.blacklist(refreshToken, jwtTokenProvider.getRefreshExpirationMs());
 
             String newAccessToken = jwtTokenProvider.generateAccessToken(username);
+            String newRefreshToken = jwtTokenProvider.generateRefreshToken(username);
             return LoginResponse.builder()
                     .accessToken(newAccessToken)
+                    .refreshToken(newRefreshToken)
                     .tokenType("Bearer")
                     .expiresIn(jwtTokenProvider.getExpirationMs() / 1000)
                     .build();
@@ -115,8 +113,26 @@ public class AuthService {
     }
 
     public void logout(String token) {
-        if (jwtTokenProvider.validateToken(token)) {
-            tokenBlacklistService.blacklist(token, jwtTokenProvider.getExpirationMs());
+        logout(token, null);
+    }
+
+    public void logout(String accessToken, String refreshToken) {
+        if (!StringUtils.hasText(accessToken) || !jwtTokenProvider.validateToken(accessToken)) {
+            return;
+        }
+
+        String username = jwtTokenProvider.getUsernameFromToken(accessToken);
+        boolean validRefreshToken = StringUtils.hasText(refreshToken)
+                && jwtTokenProvider.validateToken(refreshToken);
+        tokenBlacklistService.blacklist(accessToken, jwtTokenProvider.getExpirationMs());
+
+        if (validRefreshToken
+                && !username.equals(jwtTokenProvider.getUsernameFromToken(refreshToken))) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED);
+        }
+
+        if (validRefreshToken) {
+            tokenBlacklistService.blacklist(refreshToken, jwtTokenProvider.getRefreshExpirationMs());
         }
     }
 }

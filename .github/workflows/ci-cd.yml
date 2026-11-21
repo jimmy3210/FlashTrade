@@ -1,0 +1,221 @@
+name: CI and Container Release
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+  push:
+    branches:
+      - main
+      - develop
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  backend-tests:
+    name: Backend tests (Java 21)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: flash_trade_test
+          MYSQL_USER: flashtrade
+          MYSQL_PASSWORD: ci-test-password
+          MYSQL_ROOT_PASSWORD: ci-root-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci-root-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: microsoft
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: flash-trade-api/pom.xml
+
+      - name: Test and verify API
+        working-directory: flash-trade-api
+        run: mvn --batch-mode --no-transfer-progress verify -Dspring.profiles.active=test
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_USERNAME: flashtrade
+          DB_PASSWORD: ci-test-password
+          REDIS_HOST: 127.0.0.1
+          REDIS_PORT: 6379
+          JWT_SECRET: ci-only-secret-not-for-production-0123456789
+
+      - name: Upload JaCoCo report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-jacoco-report
+          path: flash-trade-api/target/site/jacoco/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  mock-tests:
+    name: Mock service tests (Java 21)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: microsoft
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: flash-trade-mock/pom.xml
+
+      - name: Test and verify mock service
+        working-directory: flash-trade-mock
+        run: mvn --batch-mode --no-transfer-progress verify
+
+  flutter-checks:
+    name: Flutter analyze and tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install Flutter dependencies
+        working-directory: flash-trade-app
+        run: flutter pub get
+
+      - name: Analyze Flutter code
+        working-directory: flash-trade-app
+        run: flutter analyze
+
+      - name: Run Flutter tests
+        working-directory: flash-trade-app
+        run: flutter test
+
+  admin-build:
+    name: Admin typecheck and build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: flash-trade-web/package-lock.json
+
+      - name: Install admin dependencies
+        working-directory: flash-trade-web
+        run: npm ci
+
+      - name: Audit admin dependencies
+        working-directory: flash-trade-web
+        run: npm audit --audit-level=high
+
+      - name: Typecheck and build admin
+        working-directory: flash-trade-web
+        run: npm run build
+
+  publish-api-image:
+    name: Publish API image to GHCR
+    runs-on: ubuntu-latest
+    needs:
+      - backend-tests
+      - mock-tests
+      - flutter-checks
+      - admin-build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-')
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Validate stable release tag
+        shell: bash
+        run: |
+          if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release tags must use the stable vMAJOR.MINOR.PATCH format."
+            exit 1
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: flash-trade-web/package-lock.json
+
+      - name: Install admin dependencies
+        working-directory: flash-trade-web
+        run: npm ci
+
+      - name: Build admin assets into API resources
+        working-directory: flash-trade-web
+        run: npm run build
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Generate image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/flashtradeapi
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+
+      - name: Sign in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish API image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./flash-trade-api
+          file: ./flash-trade-api/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

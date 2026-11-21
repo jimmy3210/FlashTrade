@@ -4,6 +4,8 @@
 **日期**: 2026-07-26  
 **状态**: 一对一绑定 + 交易端账户查询完整实现
 
+**响应格式状态**：当前后端及 Flutter/Web 自有客户端已按 V1 `code/message/data` 契约迁移；`code` 使用稳定业务码，HTTP 状态独立表达，错误 `data` 包含 `fieldErrors` 和服务端生成/验证的 `traceId`。本文件中早期端点示例可能保留历史包装，实际响应以 API 规格书及运行代码为准。完整 API 回归和已部署调用方升级仍待验收。
+
 ---
 
 ## 📌 API 总览
@@ -79,6 +81,8 @@ Content-Type: application/json
   clientOrderId?: string;    // 客户端订单 ID（用于幂等）
 }
 ```
+
+`clientOrderId` 可选，建议每个订单请求提供不超过 100 个字符的唯一 ID。服务端按用户、账户和券商保存该 ID；相同 ID 的成功重试返回已有委托，不会再次下单。若已有请求仍在处理或结果尚未确认，接口返回 HTTP 409（`ORDER_RESULT_UNCONFIRMED`）。客户端应先查询订单状态，不得自动生成新 ID 重放同一笔结果未知的订单。未提供 `clientOrderId` 时不提供请求幂等保证。
 
 **响应** (200 OK):
 ```json
@@ -492,41 +496,102 @@ Authorization: Bearer {token}
 
 ## 3️⃣ 用户管理 API
 
-### 3.1 用户列表 / User List
+当前管理端使用 `/users`。列表和详情允许平台管理员，以及有明确公司 Scope 的 `ROLE_ADMIN` / `ROLE_COMPANY_ADMIN`；服务端按 `users.company_id` 过滤，跨公司详情按未找到处理，无公司 Scope 默认拒绝。创建、更新、停用和密码修改仅允许 `ROLE_SUPER_ADMIN`。
 
 ```http
-GET /admin/users
+GET /users
 Authorization: Bearer {token}
 ```
 
-**权限**: `ROLE_ADMIN`
+### 3.1 用户详情
 
-**响应** (200 OK):
+```http
+GET /users/{id}
+Authorization: Bearer {token}
+```
+
+### 3.2 创建 / 更新用户
+
+```http
+POST /users
+PUT /users/{id}
+Authorization: Bearer {token}
+Content-Type: application/json
+```
+
 ```json
 {
-  "success": true,
-  "data": [
-    {
-      "id": 1,
-      "username": "admin",
-      "role": "ROLE_ADMIN",
-      "enabled": 1,
-      "created_at": "2026-01-01T00:00:00Z",
-      "updated_at": "2026-01-01T00:00:00Z"
-    },
-    {
-      "id": 5,
-      "username": "trader01",
-      "role": "ROLE_TRADER",
-      "enabled": 1,
-      "created_at": "2026-07-26T10:00:00Z",
-      "updated_at": "2026-07-26T10:00:00Z"
-    }
-  ]
+  "username": "trader01",
+  "accountUserId": "broker-account-reference",
+  "brokerName": "SCHWAB",
+  "companyId": 42,
+  "password": "<initial-password>"
 }
 ```
 
-**说明**: 不返回密码哈希
+`companyId` 必须指向已启用公司；创建时必填。更新也必须提交归属公司，变更公司归属只允许平台管理员，并写入操作审计。用户始终以 `ROLE_TRADER` 创建；更新保留现有角色，不接受客户端角色字段。密码不会写入审计内容。
+
+用户选择公司可调用 `GET /api/v1/admin/companies?page=0&size=100`，并按分页读取全部公司；仅已启用公司可用于创建或变更归属。
+
+### 3.3 停用用户 / 重置密码
+
+```http
+POST /users/status
+POST /users/{id}/password
+Authorization: Bearer {token}
+```
+
+上述写操作仅允许 `ROLE_SUPER_ADMIN`。旧用户若 `company_id` 未完成可信映射，将不会出现在公司管理员的列表中。
+
+### 3.3A 旧数据公司 Scope 映射
+
+旧用户和旧券商账户若缺少可信公司归属，不自动获得任何公司 Scope。以下接口仅允许 `ROLE_SUPER_ADMIN`，并记录操作审计：
+
+```http
+GET /admin/company-mappings
+POST /admin/company-mappings/users/{id}
+POST /admin/company-mappings/accounts/{id}
+POST /admin/company-mappings/batch
+Authorization: Bearer {token}
+```
+
+映射旧用户：
+
+```json
+{"companyId":42}
+```
+
+映射旧券商账户所有者：
+
+```json
+{"userId":7}
+```
+
+目标用户必须已归属有效启用公司。批量接口逐项处理并返回成功或失败结果，不会因单项失败回滚其他成功项：
+
+```json
+{
+  "users":[{"userId":7,"companyId":42}],
+  "accounts":[{"accountId":9,"userId":7}]
+}
+```
+
+### 3.4 用户响应字段
+
+成功响应使用统一的 `code/message/data` 契约；`data` 为 `UserAdminDto`：
+
+```typescript
+interface UserAdminDto {
+  userId: number;
+  username: string;
+  accountUserId: string | null;
+  brokerName: string | null;
+  companyId: number | null;
+  companyName: string | null;
+  role: string;
+  deleteFlag: 0 | 1;
+}
+```
 
 ---
 

@@ -22,6 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -74,37 +76,48 @@ public class TradeExecutionService {
      */
     @Transactional
     public PlaceOrderResult placeOrder(String username, String accountId, OrderRequest request) {
+        AccountMapping mapping = resolveAuthorizedAccount(username, accountId);
+        String clientOrderId = request.getClientOrderId();
+        if (clientOrderId != null && (clientOrderId.isBlank() || clientOrderId.length() > 100)) {
+            throw new BusinessException(ErrorCode.INVALID_ARGUMENT, "幂等 ID 必须为 1 到 100 个字符");
+        }
+
+        if (clientOrderId != null) {
+            Optional<Order> existingOrder = findByClientOrderId(mapping, accountId, clientOrderId);
+            if (existingOrder.isPresent()) {
+                return resultForExistingOrder(existingOrder.get());
+            }
+        }
+
         // リスクコントロールチェック
         if (riskService.isAccountBlocked(accountId)) {
             throw new BusinessException(ErrorCode.ACCOUNT_RISK_BLOCKED);
         }
 
-        // 幂等检查
-        if (request.getClientOrderId() != null) {
-            String idempotencyKey = IDEMPOTENCY_KEY_PREFIX + request.getClientOrderId();
-            Boolean isNew = redisTemplate.opsForValue()
-                    .setIfAbsent(idempotencyKey, "1", IDEMPOTENCY_TTL);
-            if (Boolean.FALSE.equals(isNew)) {
-                // 重复请求：查询已有 order，返回其 externalOrderId
-                return orderRepository.findByExternalOrderId(request.getClientOrderId())
-                        .map(o -> PlaceOrderResult.builder()
-                                .success(true)
-                                .externalOrderId(o.getExternalOrderId())
-                                .message("重复请求，返回已有委托")
-                                .build())
-                        .orElse(PlaceOrderResult.builder()
-                                .success(false)
-                                .message("重复请求，委托记录未找到")
-                                .build());
-            }
-        }
-
         // 解析券商信息
-        AccountMapping mapping = resolveAccount(accountId);
         BrokerClient broker = brokerMap.get(mapping.getBrokerName());
         if (broker == null) {
             throw new BusinessException(ErrorCode.BROKER_UNAVAILABLE,
                     "未找到券商实现: " + mapping.getBrokerName());
+        }
+
+        // 幂等检查
+        if (clientOrderId != null) {
+            String idempotencyKey = idempotencyKey(mapping, accountId, clientOrderId);
+            Boolean isNew = redisTemplate.opsForValue()
+                    .setIfAbsent(idempotencyKey, "SUBMITTING", IDEMPOTENCY_TTL);
+            if (isNew == null) {
+                throw new BusinessException(ErrorCode.BROKER_UNAVAILABLE,
+                        "无法确认下单幂等状态；请查询订单状态后再操作");
+            }
+            if (!isNew) {
+                return findByClientOrderId(mapping, accountId, clientOrderId)
+                        .map(this::resultForExistingOrder)
+                        .orElseGet(() -> PlaceOrderResult.builder()
+                                .success(false)
+                                .message("相同下单请求正在处理或结果尚未确认；请先查询订单状态，不要重复提交")
+                                .build());
+            }
         }
 
         // 调用券商 API
@@ -124,6 +137,7 @@ public class TradeExecutionService {
             order.setStatus(OrderStatus.PENDING);
             order.setBrokerName(mapping.getBrokerName());
             order.setExternalOrderId(result.getExternalOrderId());
+            order.setClientOrderId(clientOrderId);
             orderRepository.save(order);
             log.info("下单成功 broker={} account={} symbol={} externalOrderId={}",
                     mapping.getBrokerName(), accountId,
@@ -131,6 +145,34 @@ public class TradeExecutionService {
         }
 
         return result;
+    }
+
+    private Optional<Order> findByClientOrderId(
+            AccountMapping mapping, String accountId, String clientOrderId) {
+        return orderRepository.findByUserIdAndAccountIdAndBrokerNameAndClientOrderId(
+                mapping.getUserId(), accountId, mapping.getBrokerName(), clientOrderId);
+    }
+
+    private String idempotencyKey(
+            AccountMapping mapping, String accountId, String clientOrderId) {
+        return IDEMPOTENCY_KEY_PREFIX + mapping.getUserId()
+                + ":" + accountId.length() + ":" + accountId
+                + ":" + mapping.getBrokerName().length() + ":" + mapping.getBrokerName()
+                + ":" + clientOrderId.length() + ":" + clientOrderId;
+    }
+
+    private PlaceOrderResult resultForExistingOrder(Order order) {
+        if (order.getExternalOrderId() == null || order.getExternalOrderId().isBlank()) {
+            return PlaceOrderResult.builder()
+                    .success(false)
+                    .message("已有下单记录尚未确认券商订单号；请查询订单状态，不要重复提交")
+                    .build();
+        }
+        return PlaceOrderResult.builder()
+                .success(true)
+                .externalOrderId(order.getExternalOrderId())
+                .message("重复请求，返回已有委托")
+                .build();
     }
 
     /**
@@ -142,7 +184,7 @@ public class TradeExecutionService {
      */
     @Transactional
     public void cancelOrder(String username, String accountId, String externalOrderId) {
-        AccountMapping mapping = resolveAccount(accountId);
+        AccountMapping mapping = resolveAuthorizedAccount(username, accountId);
         BrokerClient broker = brokerMap.get(mapping.getBrokerName());
         if (broker == null) {
             throw new BusinessException(ErrorCode.BROKER_UNAVAILABLE,
@@ -165,8 +207,8 @@ public class TradeExecutionService {
     /**
      * 查询单笔委托状态（直接调用券商 API，不走缓存）。
      */
-    public BrokerOrder getOrderStatus(String accountId, String externalOrderId) {
-        AccountMapping mapping = resolveAccount(accountId);
+    public BrokerOrder getOrderStatus(String username, String accountId, String externalOrderId) {
+        AccountMapping mapping = resolveAuthorizedAccount(username, accountId);
         BrokerClient broker = brokerMap.get(mapping.getBrokerName());
         if (broker == null) {
             throw new BusinessException(ErrorCode.BROKER_UNAVAILABLE,
@@ -185,5 +227,15 @@ public class TradeExecutionService {
                 .findFirst()
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
                         "账户 [" + accountId + "] 不在配置列表中"));
+    }
+
+    private AccountMapping resolveAuthorizedAccount(String username, String accountId) {
+        AccountMapping mapping = resolveAccount(accountId);
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在"));
+        if (!Objects.equals(mapping.getUserId(), user.getId())) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED);
+        }
+        return mapping;
     }
 }

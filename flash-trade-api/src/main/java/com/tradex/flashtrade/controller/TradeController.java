@@ -17,6 +17,8 @@ import com.tradex.flashtrade.broker.dto.OrderRequest;
 import com.tradex.flashtrade.broker.dto.PlaceOrderResult;
 import com.tradex.flashtrade.dto.admin.BrokerAccountDto;
 import com.tradex.flashtrade.dto.common.ApiResponse;
+import com.tradex.flashtrade.exception.BusinessException;
+import com.tradex.flashtrade.exception.ErrorCode;
 import com.tradex.flashtrade.service.BrokerAccountService;
 import com.tradex.flashtrade.service.TradeExecutionService;
 import com.tradex.flashtrade.service.UserLookupService;
@@ -63,6 +65,9 @@ public class TradeController {
             @Valid @RequestBody OrderRequest request) {
         PlaceOrderResult result = tradeExecutionService.placeOrder(
                 userDetails.getUsername(), accountId, request);
+        if (!result.isSuccess()) {
+            throw new BusinessException(ErrorCode.ORDER_RESULT_UNCONFIRMED);
+        }
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 
@@ -88,9 +93,11 @@ public class TradeController {
     @GetMapping("/order/{externalOrderId}/status")
     @Operation(summary = "查询委托状态", description = "实时查询指定委托的最新状态（直接调用券商 API，不使用缓存）。")
     public ResponseEntity<ApiResponse<BrokerOrder>> getOrderStatus(
+            @AuthenticationPrincipal UserDetails userDetails,
             @RequestParam String accountId,
             @PathVariable String externalOrderId) {
-        BrokerOrder order = tradeExecutionService.getOrderStatus(accountId, externalOrderId);
+        BrokerOrder order = tradeExecutionService.getOrderStatus(
+                userDetails.getUsername(), accountId, externalOrderId);
         return ResponseEntity.ok(ApiResponse.success(order));
     }
 

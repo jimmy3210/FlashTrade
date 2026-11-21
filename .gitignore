@@ -8,7 +8,10 @@ Thumbs.db
 Desktop.ini
 
 # IDE / editor
-.vscode/
+# Keep shared workspace settings and extension recommendations; ignore personal files.
+/.vscode/*
+!/.vscode/settings.json
+!/.vscode/extensions.json
 .idea/
 *.iml
 *.swp
@@ -70,4 +73,3 @@ flash-trade-api/docker/*.log
 **/.cache/
 **/.tmp/
 **/tmp/
-

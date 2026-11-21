@@ -46,6 +46,9 @@ spring:
     validate-on-migrate: true
 
 app:
+  security:
+    web-auth:
+      refresh-cookie-secure: true
   jwt:
     secret: ${JWT_SECRET}
     expiration-ms: ${JWT_EXPIRATION_MS:3600000}
@@ -61,7 +64,6 @@ app:
     token-refresh-threshold-seconds: 120
     connect-timeout-ms: 5000
     read-timeout-ms: 15000
-    mock-enabled: false
 
 logging:
   level:

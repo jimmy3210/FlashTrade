@@ -9,6 +9,7 @@ import com.tradex.flashtrade.entity.User;
 import com.tradex.flashtrade.repository.UserRepository;
 import com.tradex.flashtrade.exception.BusinessException;
 import com.tradex.flashtrade.exception.ErrorCode;
+import com.tradex.flashtrade.security.TenantScopeService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
@@ -17,9 +18,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalLong;
 
 @Service
 public class CompanyService {
@@ -27,14 +32,21 @@ public class CompanyService {
     private final JdbcTemplate jdbc;
     private final AuditLogger auditLogger;
     private final UserRepository userRepository;
+    private final TenantScopeService tenantScopeService;
 
-    public CompanyService(JdbcTemplate jdbc, AuditLogger auditLogger, UserRepository userRepository) {
+    public CompanyService(
+            JdbcTemplate jdbc,
+            AuditLogger auditLogger,
+            UserRepository userRepository,
+            TenantScopeService tenantScopeService) {
         this.jdbc = jdbc;
         this.auditLogger = auditLogger;
         this.userRepository = userRepository;
+        this.tenantScopeService = tenantScopeService;
     }
 
     public List<CompanyDto> listCompanies() {
+        OptionalLong scope = tenantScopeService.currentCompanyScope();
         String sql = """
                 SELECT c.id,
                        c.name,
@@ -42,15 +54,11 @@ public class CompanyService {
                        c.created_at,
                        (SELECT COUNT(*) FROM t_group g WHERE g.company_id = c.id) AS group_count
                 FROM t_company c
-                ORDER BY c.id
-                """;
-        return jdbc.query(sql, (rs, rowNum) -> new CompanyDto(
-                rs.getLong("id"),
-                rs.getString("name"),
-                rs.getBoolean("is_active"),
-                rs.getInt("group_count"),
-                rs.getTimestamp("created_at").toLocalDateTime()
-        ));
+                """ + (scope.isPresent() ? "WHERE c.id = ?\n" : "") + "ORDER BY c.id";
+        if (scope.isPresent()) {
+            return jdbc.query(sql, this::mapCompanyRow, scope.getAsLong());
+        }
+        return jdbc.query(sql, this::mapCompanyRow);
     }
 
     /**
@@ -61,22 +69,26 @@ public class CompanyService {
         if (size <= 0) size = 20;
         int offset = page * size;
 
-        String baseWhere = "";
-        Object[] paramsForCount = new Object[]{};
-        Object[] paramsForList = new Object[]{};
-
+        OptionalLong scope = tenantScopeService.currentCompanyScope();
+        List<String> filters = new ArrayList<>();
+        List<Object> countParameters = new ArrayList<>();
+        if (scope.isPresent()) {
+            filters.add("c.id = ?");
+            countParameters.add(scope.getAsLong());
+        }
         if (q != null && !q.isBlank()) {
-            baseWhere = "WHERE c.name LIKE ?";
+            filters.add("c.name LIKE ?");
             String like = "%" + q.trim() + "%";
-            paramsForCount = new Object[]{like};
-            paramsForList = new Object[]{like, size, offset};
-        } else {
-            paramsForCount = new Object[]{};
-            paramsForList = new Object[]{size, offset};
+            countParameters.add(like);
         }
 
+        String baseWhere = filters.isEmpty() ? "" : "WHERE " + String.join(" AND ", filters);
         String countSql = String.format("SELECT COUNT(1) FROM t_company c %s", baseWhere);
-        long total = jdbc.queryForObject(countSql, Long.class, paramsForCount);
+        Long count = jdbc.queryForObject(countSql, Long.class, countParameters.toArray());
+        if (count == null) {
+            throw new IllegalStateException("Company count query returned no result");
+        }
+        long total = count;
 
         String listSql = String.format("""
                 SELECT c.id,
@@ -90,18 +102,16 @@ public class CompanyService {
                 LIMIT ? OFFSET ?
                 """, baseWhere);
 
-        List<CompanyDto> items = jdbc.query(listSql, (rs, rowNum) -> new CompanyDto(
-                rs.getLong("id"),
-                rs.getString("name"),
-                rs.getBoolean("is_active"),
-                rs.getInt("group_count"),
-                rs.getTimestamp("created_at").toLocalDateTime()
-        ), paramsForList);
+        List<Object> listParameters = new ArrayList<>(countParameters);
+        listParameters.add(size);
+        listParameters.add(offset);
+        List<CompanyDto> items = jdbc.query(listSql, this::mapCompanyRow, listParameters.toArray());
 
         return new com.tradex.flashtrade.dto.admin.CompanyListResponse(items, total, page, size);
     }
 
     public CompanyDto getCompany(Long companyId) {
+        tenantScopeService.assertCompanyAccess(companyId);
         String sql = """
                 SELECT c.id,
                        c.name,
@@ -111,13 +121,7 @@ public class CompanyService {
                 FROM t_company c
                 WHERE c.id = ?
                 """;
-        List<CompanyDto> list = jdbc.query(sql, (rs, rowNum) -> new CompanyDto(
-                rs.getLong("id"),
-                rs.getString("name"),
-                rs.getBoolean("is_active"),
-                rs.getInt("group_count"),
-                rs.getTimestamp("created_at").toLocalDateTime()
-        ), companyId);
+        List<CompanyDto> list = jdbc.query(sql, this::mapCompanyRow, companyId);
         if (list.isEmpty()) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "公司不存在: " + companyId);
         }
@@ -126,6 +130,7 @@ public class CompanyService {
 
     @Transactional
     public CompanyDto createCompany(CompanyCreateRequest request) {
+        tenantScopeService.requirePlatformAdmin();
         if (request == null || request.getName() == null || request.getName().isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_ARGUMENT, "公司名称不能为空");
         }
@@ -163,6 +168,7 @@ public class CompanyService {
 
     @Transactional
     public CompanyDto updateCompany(Long companyId, CompanyUpdateRequest request) {
+        tenantScopeService.requirePlatformAdmin();
         if (request == null || request.getName() == null || request.getName().isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_ARGUMENT, "公司名称不能为空");
         }
@@ -193,6 +199,7 @@ public class CompanyService {
 
     @Transactional
     public void setCompanyStatus(Long companyId, CompanyStatusRequest request) {
+        tenantScopeService.requirePlatformAdmin();
         if (request == null || request.getIsActive() == null) {
             throw new BusinessException(ErrorCode.INVALID_ARGUMENT, "公司状态不能为空");
         }
@@ -214,6 +221,7 @@ public class CompanyService {
 
     @Transactional
     public void deleteCompany(Long companyId) {
+        tenantScopeService.requirePlatformAdmin();
         if (!existsById(companyId)) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "公司不存在: " + companyId);
         }
@@ -235,6 +243,15 @@ public class CompanyService {
     private boolean existsById(Long companyId) {
         Integer count = jdbc.queryForObject("SELECT COUNT(1) FROM t_company WHERE id = ?", Integer.class, companyId);
         return count != null && count > 0;
+    }
+
+    private CompanyDto mapCompanyRow(ResultSet rs, int rowNum) throws SQLException {
+        return new CompanyDto(
+                rs.getLong("id"),
+                rs.getString("name"),
+                rs.getBoolean("is_active"),
+                rs.getInt("group_count"),
+                rs.getTimestamp("created_at").toLocalDateTime());
     }
 
     private boolean existsByName(String name) {

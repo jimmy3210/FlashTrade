@@ -45,7 +45,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @RequestMapping("/admin")
 @Tag(name = "后台管理", description = "管理员专用接口（需 ADMIN 角色）")
 @SecurityRequirement(name = "bearerAuth")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
 public class AdminController {
 
     private final PositionAggregatorService aggregatorService;
@@ -160,20 +160,20 @@ public class AdminController {
     }
 
     @GetMapping("/brokers/configs")
-    @Operation(summary = "券商运行时配置列表", description = "返回所有支持的券商运行时模式和 API URL 设置")
+    @Operation(summary = "券商运行时配置列表", description = "返回服务端校验后的有效模式；不回显券商 API 地址")
     public ResponseEntity<ApiResponse<List<BrokerConfigResponse>>> getBrokerConfigs() {
         return ResponseEntity.ok(ApiResponse.success(brokerConfigService.listBrokerConfigs()));
     }
 
     @GetMapping("/brokers/configs/{brokerName}")
-    @Operation(summary = "查询单个券商配置", description = "根据券商标识获取当前运行时模式与 API URL")
+    @Operation(summary = "查询单个券商配置", description = "根据券商标识获取部署允许的有效模式；不回显券商 API 地址")
     public ResponseEntity<ApiResponse<BrokerConfigResponse>> getBrokerConfig(
             @PathVariable String brokerName) {
         return ResponseEntity.ok(ApiResponse.success(brokerConfigService.getBrokerConfig(brokerName)));
     }
 
     @PutMapping("/brokers/configs/{brokerName}")
-    @Operation(summary = "更新券商运行时配置", description = "保存券商的模式、Mock 开关和自定义 API URL")
+    @Operation(summary = "更新券商运行时配置", description = "仅允许部署白名单内的券商模式；API 地址由服务端环境配置管理")
     public ResponseEntity<ApiResponse<BrokerConfigResponse>> updateBrokerConfig(
             @PathVariable String brokerName,
             @RequestBody BrokerConfigRequest request) {

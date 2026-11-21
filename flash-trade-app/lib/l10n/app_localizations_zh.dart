@@ -78,6 +78,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get homeLogout => '退出登录';
 
   @override
+  String get logoutServerRevocationUnconfirmed => '已清除本机凭证，但服务器会话撤销未确认。';
+
+  @override
   String get homeRefresh => '刷新';
 
   @override
@@ -486,6 +489,9 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get homeLogout => '登出';
+
+  @override
+  String get logoutServerRevocationUnconfirmed => '已清除本機憑證，但伺服器工作階段撤銷未確認。';
 
   @override
   String get homeRefresh => '重新整理';

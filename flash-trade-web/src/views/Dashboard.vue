@@ -4,32 +4,47 @@
     <aside class="sidebar">
       <div class="sidebar-header">
         <h2 class="logo">风控管理</h2>
-        <button class="logout-btn" @click="logout">Logout</button>
+        <button class="logout-btn" :disabled="logoutLoading" @click="logout">
+          {{ logoutLoading ? '正在退出…' : '退出' }}
+        </button>
       </div>
-      <ul class="nav-list">
-        <li>
-          <router-link to="positions" class="nav-link">在仓管理</router-link>
-        </li>
-        <li>
-          <router-link to="users" class="nav-link">用户管理</router-link>
-        </li>
-        <li>
-          <router-link to="companies" class="nav-link">公司管理</router-link>
-        </li>
-        <li>
-          <router-link to="broker-accounts" class="nav-link">券商账户</router-link>
-        </li>
-        <li>
-          <router-link to="user-broker-binding" class="nav-link">账户绑定</router-link>
-        </li>
-        <li>
-          <router-link to="brokers" class="nav-link">券商配置</router-link>
-        </li>
-        <li>
-          <span class="nav-link disabled-text">业绩管理</span>
-          <!--<router-link to="performance" class="nav-link">业绩管理</router-link>-->
-        </li>
-      </ul>
+      <nav aria-label="管理导航">
+        <ul class="nav-list">
+          <li>
+            <router-link to="/dashboard/overview" class="nav-link">运营概览</router-link>
+          </li>
+          <li>
+            <router-link to="/dashboard/positions" class="nav-link">在仓管理</router-link>
+          </li>
+          <li>
+            <router-link to="/dashboard/orders" class="nav-link">订单管理</router-link>
+          </li>
+          <li>
+            <router-link to="/dashboard/users" class="nav-link">用户管理</router-link>
+          </li>
+          <li>
+            <router-link to="/dashboard/companies" class="nav-link">公司管理</router-link>
+          </li>
+          <li>
+            <router-link to="/dashboard/broker-accounts" class="nav-link">券商账户</router-link>
+          </li>
+          <li>
+            <router-link to="/dashboard/user-broker-binding" class="nav-link">账户绑定</router-link>
+          </li>
+          <li>
+            <router-link to="/dashboard/brokers" class="nav-link">券商配置</router-link>
+          </li>
+          <li>
+            <router-link to="/dashboard/risk" class="nav-link">账户风控</router-link>
+          </li>
+          <li>
+            <router-link to="/dashboard/audit-logs" class="nav-link">审计日志</router-link>
+          </li>
+          <li>
+            <router-link to="/dashboard/scope-mappings" class="nav-link">Scope 映射</router-link>
+          </li>
+        </ul>
+      </nav>
     </aside>
 
     <!-- 主内容 -->
@@ -45,19 +60,37 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useRouter, useRoute } from "vue-router";
+import { ElMessage } from "element-plus";
+import { revokeCurrentSession } from "@/utils/session";
 
 const router = useRouter();
 const route = useRoute();
+const logoutLoading = ref(false);
 
 // 页面标题
 const pageTitle = computed(() => route.meta.title || "风控管理");
 
 // Logout
-const logout = () => {
-  localStorage.removeItem("token");
-  router.push("/login");
+const logout = async () => {
+  if (logoutLoading.value) return;
+  logoutLoading.value = true;
+  let revokeFailed = false;
+  try {
+    await revokeCurrentSession();
+  } catch {
+    revokeFailed = true;
+  } finally {
+    logoutLoading.value = false;
+  }
+
+  if (revokeFailed) {
+    ElMessage.warning("本地登录状态已清除，但服务端撤销未确认；请确认网络正常后重新登录。");
+  } else {
+    ElMessage.success("已安全退出");
+  }
+  await router.replace("/login");
 };
 </script>
 
@@ -101,6 +134,10 @@ const logout = () => {
   font-size: 12px;
   transition: background 0.3s;
 }
+.logout-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
 .logout-btn:hover {
   background-color: #c0392b;
 }
@@ -134,7 +171,7 @@ const logout = () => {
 /* 主内容 */
 .main-content {
   flex: 1;
-  min-width: 960px;
+  min-width: 0;
   overflow: hidden;
   background: #f5f6fa;
   display: flex;
@@ -200,5 +237,51 @@ const logout = () => {
 }
 .btn:hover {
   background-color: #369b6f;
+}
+
+@media (max-width: 760px) {
+  .dashboard-container {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: auto;
+    padding: 12px 16px;
+  }
+
+  .sidebar-header {
+    margin-bottom: 12px;
+  }
+
+  .sidebar .logo {
+    margin: 0;
+    font-size: 20px;
+  }
+
+  .nav-list {
+    display: flex;
+    gap: 6px;
+    margin: 0;
+    overflow-x: auto;
+    padding: 0 0 4px;
+  }
+
+  .nav-list li {
+    flex: 0 0 auto;
+    margin: 0;
+  }
+
+  .nav-link {
+    padding: 8px 12px;
+    white-space: nowrap;
+  }
+
+  .main-header {
+    padding: 16px;
+  }
+
+  .content {
+    padding: 16px;
+  }
 }
 </style>

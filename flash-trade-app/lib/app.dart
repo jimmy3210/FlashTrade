@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'core/constants/app_colors.dart';
 import 'features/auth/presentation/login_screen.dart';
+import 'features/auth/presentation/logout_action.dart';
 import 'features/auth/presentation/splash_screen.dart';
 import 'features/desktop/desktop_dashboard.dart';
 import 'features/orders/presentation/orders_screen.dart';
@@ -240,7 +242,7 @@ class MainShell extends StatelessWidget {
   }
 }
 
-class _DesktopShell extends StatelessWidget {
+class _DesktopShell extends ConsumerWidget {
   const _DesktopShell({required this.location, required this.child});
 
   final String location;
@@ -249,7 +251,7 @@ class _DesktopShell extends StatelessWidget {
   bool _isSelected(String route) => location == route;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: AppColors.primaryBg,
@@ -297,7 +299,9 @@ class _DesktopShell extends StatelessWidget {
                   ],
                 ),
                 InkWell(
-                  onTap: () {},
+                  onTap: () async {
+                    await logoutAndNavigate(context, ref);
+                  },
                   borderRadius: BorderRadius.circular(14),
                   child: Container(
                     width: 44,

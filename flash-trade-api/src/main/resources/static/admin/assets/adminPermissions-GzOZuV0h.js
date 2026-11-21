@@ -1,0 +1,1 @@
+import{A as o}from"./index-DISNWnW4.js";const t=async()=>{const r=await o.get("/api/v1/auth/me");if(!Array.isArray(r?.roles)||r.roles.some(s=>typeof s!="string"))throw new Error("服务器返回的角色信息格式无效");return r.roles.includes("ROLE_SUPER_ADMIN")};export{t as l};

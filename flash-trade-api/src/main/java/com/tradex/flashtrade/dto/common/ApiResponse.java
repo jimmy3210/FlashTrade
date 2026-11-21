@@ -1,37 +1,31 @@
 package com.tradex.flashtrade.dto.common;
 
-import java.time.Instant;
+import java.util.List;
 
-public class ApiResponse<T> {
-
-    private final boolean success;
-    private final T data;
-    private final ErrorBody error;
-    private final Instant timestamp;
-
-    private ApiResponse(boolean success, T data, ErrorBody error) {
-        this.success = success;
-        this.data = data;
-        this.error = error;
-        this.timestamp = Instant.now();
-    }
+public record ApiResponse<T>(String code, String message, T data) {
 
     public static <T> ApiResponse<T> success(T data) {
-        return new ApiResponse<>(true, data, null);
+        return success("请求成功", data);
     }
 
-    public static <T> ApiResponse<T> error(String code, String message) {
-        return new ApiResponse<>(false, null, new ErrorBody(code, message, null));
+    public static <T> ApiResponse<T> success(String message, T data) {
+        return new ApiResponse<>("SUCCESS", message, data);
     }
 
-    public static <T> ApiResponse<T> error(String code, String message, String traceId) {
-        return new ApiResponse<>(false, null, new ErrorBody(code, message, traceId));
+    public static ApiResponse<ErrorData> error(String code, String message, String traceId) {
+        return error(code, message, List.of(), traceId);
     }
 
-    public boolean isSuccess() { return success; }
-    public T getData() { return data; }
-    public ErrorBody getError() { return error; }
-    public Instant getTimestamp() { return timestamp; }
+    public static ApiResponse<ErrorData> error(
+            String code, String message, List<FieldError> fieldErrors, String traceId) {
+        return new ApiResponse<>(code, message, new ErrorData(fieldErrors, traceId));
+    }
 
-    public record ErrorBody(String code, String message, String traceId) {}
+    public record ErrorData(List<FieldError> fieldErrors, String traceId) {
+        public ErrorData {
+            fieldErrors = List.copyOf(fieldErrors);
+        }
+    }
+
+    public record FieldError(String field, String code, String message) {}
 }

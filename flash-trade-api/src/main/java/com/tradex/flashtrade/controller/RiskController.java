@@ -1,6 +1,8 @@
 package com.tradex.flashtrade.controller;
 
 import com.tradex.flashtrade.dto.common.ApiResponse;
+import com.tradex.flashtrade.exception.BusinessException;
+import com.tradex.flashtrade.exception.ErrorCode;
 import com.tradex.flashtrade.service.RiskService;
 import com.tradex.flashtrade.service.UserLookupService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -21,9 +23,9 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/admin/risk")
-@Tag(name = "风控管理", description = "账户关停 / 解除 / 限制 / 强制清仓")
+@Tag(name = "风控管理", description = "查询账户风控状态；变更和清仓操作暂缓")
 @SecurityRequirement(name = "bearerAuth")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
 public class RiskController {
 
     private final RiskService       riskService;
@@ -44,7 +46,7 @@ public class RiskController {
     }
 
     @PostMapping("/disable")
-    @Operation(summary = "关停账户", description = "将账户状态设为 DISABLED，下单请求将被拒绝")
+    @Operation(summary = "关停账户", description = "账户范围授权能力完成前拒绝变更")
     public ResponseEntity<ApiResponse<String>> disable(
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestParam String accountId) {
@@ -54,7 +56,7 @@ public class RiskController {
     }
 
     @PostMapping("/enable")
-    @Operation(summary = "解除账户关停", description = "将账户状态恢复为 NORMAL")
+    @Operation(summary = "解除账户关停", description = "账户范围授权能力完成前拒绝变更")
     public ResponseEntity<ApiResponse<String>> enable(
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestParam String accountId) {
@@ -64,7 +66,7 @@ public class RiskController {
     }
 
     @PostMapping("/limit")
-    @Operation(summary = "限制账户交易", description = "将账户状态设为 LIMITED（只读，不能下单）")
+    @Operation(summary = "限制账户交易", description = "账户范围授权能力完成前拒绝变更")
     public ResponseEntity<ApiResponse<String>> limit(
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestParam String accountId) {
@@ -74,16 +76,10 @@ public class RiskController {
     }
 
     @PostMapping("/liquidate")
-    @Operation(summary = "强制清仓", description = "异步执行：对账户所有持仓发出市价卖出委托，状态设为 LIQUIDATED。不可逆操作。")
+    @Operation(summary = "强制清仓", description = "执行状态核验能力完成前拒绝请求")
     public ResponseEntity<ApiResponse<String>> liquidate(
-            @AuthenticationPrincipal UserDetails userDetails,
             @RequestParam String accountId) {
-        Long operatorId = userLookupService.getUserIdByUsername(userDetails.getUsername());
-        // 先禁止后续下单
-        riskService.disableAccount(accountId, operatorId);
-        // 异步清仓
-        riskService.forceLiquidation(accountId, operatorId);
-        return ResponseEntity.ok(ApiResponse.success(
-                "账户 [" + accountId + "] 强制清仓已提交（异步执行）"));
+        throw new BusinessException(ErrorCode.INVALID_STATE,
+                "强制清仓已暂停，待补齐执行状态核验、环境校验和审计能力");
     }
 }

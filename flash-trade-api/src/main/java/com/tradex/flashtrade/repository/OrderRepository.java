@@ -26,10 +26,11 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
     Optional<Order> findByExternalOrderIdAndBrokerName(
             String externalOrderId, String brokerName);
 
+    Optional<Order> findByUserIdAndAccountIdAndBrokerNameAndClientOrderId(
+            Long userId, String accountId, String brokerName, String clientOrderId);
+
     /** 聚合用：按用户 + 账户 + 状态列表查询委托 */
     List<Order> findByUserIdAndAccountIdAndStatusInOrderByCreatedAtDesc(
             Long userId, String accountId, List<OrderStatus> statuses);
 
-    /** 幂等查询：按 clientOrderId 查是否已存在 */
-    Optional<Order> findByExternalOrderId(String externalOrderId);
 }

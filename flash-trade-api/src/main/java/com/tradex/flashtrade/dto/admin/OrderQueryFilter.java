@@ -39,7 +39,7 @@ public class OrderQueryFilter {
     @Schema(description = "结束日期（可选）")
     private LocalDate endDate;
     
-    @Schema(description = "排序字段: created_at/updated_at/quantity/price")
+    @Schema(description = "排序字段: created_at/updated_at/quantity/price/id/symbol")
     private String sortBy = "created_at";
     
     @Schema(description = "排序顺序: asc/desc")

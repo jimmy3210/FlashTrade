@@ -4,8 +4,6 @@ import com.tradex.flashtrade.dto.admin.PositionCloseRequest;
 import com.tradex.flashtrade.dto.common.ApiResponse;
 import com.tradex.flashtrade.exception.BusinessException;
 import com.tradex.flashtrade.exception.ErrorCode;
-import com.tradex.flashtrade.service.RiskService;
-import com.tradex.flashtrade.service.UserLookupService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -13,8 +11,6 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -28,19 +24,13 @@ import java.util.Map;
 @RestController
 @Tag(name = "仓位管理", description = "管理员仓位监控与平仓接口")
 @SecurityRequirement(name = "bearerAuth")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
 public class AdminPositionController {
 
     private final JdbcTemplate jdbc;
-    private final RiskService riskService;
-    private final UserLookupService userLookupService;
 
-    public AdminPositionController(JdbcTemplate jdbc,
-                                   RiskService riskService,
-                                   UserLookupService userLookupService) {
+    public AdminPositionController(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
-        this.riskService = riskService;
-        this.userLookupService = userLookupService;
     }
 
     @GetMapping("/positions")
@@ -58,25 +48,10 @@ public class AdminPositionController {
     }
 
     @PostMapping("/positions/close_all")
-    @Operation(summary = "一键平仓", description = "对指定用户的所有可用券商账户发起异步强制清仓")
+    @Operation(summary = "一键平仓", description = "执行状态核验能力完成前拒绝请求")
     public ResponseEntity<ApiResponse<String>> closeAllPositions(
-            @AuthenticationPrincipal UserDetails userDetails,
             @Valid @RequestBody PositionCloseRequest request) {
-        Long operatorId = userLookupService.getUserIdByUsername(userDetails.getUsername());
-        List<String> accountIds = jdbc.queryForList(
-                "SELECT account_no FROM t_broker_account WHERE user_id = ? AND status = 'ACTIVE'",
-                String.class,
-                request.getUserId());
-        if (accountIds.isEmpty()) {
-            throw new BusinessException(ErrorCode.ACCOUNT_NOT_FOUND,
-                    "用户未绑定有效券商账户：" + request.getUserId());
-        }
-
-        for (String accountId : accountIds) {
-            riskService.disableAccount(accountId, operatorId);
-            riskService.forceLiquidation(accountId, operatorId);
-        }
-
-        return ResponseEntity.ok(ApiResponse.success("用户 " + request.getUserId() + " 的平仓请求已提交"));
+        throw new BusinessException(ErrorCode.INVALID_STATE,
+                "一键平仓已暂停，待补齐逐账户执行状态核验和审计能力");
     }
 }

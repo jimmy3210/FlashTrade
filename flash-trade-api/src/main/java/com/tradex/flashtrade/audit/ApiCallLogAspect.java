@@ -11,6 +11,7 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import com.tradex.flashtrade.security.AuthService;
+import com.tradex.flashtrade.security.ClientIpResolver;
 import com.tradex.flashtrade.security.JwtTokenProvider;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -31,6 +32,7 @@ public class ApiCallLogAspect {
     @Qualifier("securityAuthService")
     private AuthService authService;
     @Autowired(required = false) private JwtTokenProvider jwtTokenProvider;
+    @Autowired private ClientIpResolver clientIpResolver;
     
     /**
      * 拦截所有管理端和交易端的 API 调用
@@ -65,7 +67,7 @@ public class ApiCallLogAspect {
             // 获取请求信息
             String httpMethod = request.getMethod();
             String endpoint = request.getRequestURI();
-            String requestIp = getClientIp(request);
+            String requestIp = clientIpResolver.resolve(request);
             String userAgent = request.getHeader("User-Agent");
             
             // 判断是否为关键操作（交易、管理操作）
@@ -95,7 +97,7 @@ public class ApiCallLogAspect {
             if (request != null) {
                 String httpMethod = request.getMethod();
                 String endpoint = request.getRequestURI();
-                String requestIp = getClientIp(request);
+                String requestIp = clientIpResolver.resolve(request);
                 String userAgent = request.getHeader("User-Agent");
                 
                 log.error("❌ API call error: {} {} | error: {} | time: {}ms",
@@ -133,27 +135,4 @@ public class ApiCallLogAspect {
         return null;
     }
     
-    private String getClientIp(HttpServletRequest request) {
-        // 尝试从多个来源获取客户端IP
-        String ip = request.getHeader("X-Forwarded-For");
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("X-Real-IP");
-        }
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("Proxy-Client-IP");
-        }
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("WL-Proxy-Client-IP");
-        }
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getRemoteAddr();
-        }
-        
-        // 如果有多个 IP（代理链），取第一个
-        if (ip != null && ip.contains(",")) {
-            ip = ip.split(",")[0].trim();
-        }
-        
-        return ip;
-    }
 }

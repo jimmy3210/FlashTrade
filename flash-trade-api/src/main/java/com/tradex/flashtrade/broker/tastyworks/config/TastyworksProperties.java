@@ -17,7 +17,6 @@ import org.springframework.stereotype.Component;
  *     username: ${TASTYTRADE_USERNAME}
  *     password: ${TASTYTRADE_PASSWORD}
  *     session-cache-key-prefix: tastytrade:session:token
- *     mock-enabled: false
  * </pre>
  */
 @RefreshScope
@@ -37,18 +36,13 @@ public class TastyworksProperties {
     /** Session Token 在 Redis 中的 Key 前缀 */
     private String sessionCacheKeyPrefix = "tastyworks:session:token";
 
-    /** true = 返回 Mock 数据（开发/测试用），false = 调用真实 API */
-    private boolean mockEnabled = false;
-
     public String getBaseUrl()                { return baseUrl; }
     public String getUsername()               { return username; }
     public String getPassword()               { return password; }
     public String getSessionCacheKeyPrefix()  { return sessionCacheKeyPrefix; }
-    public boolean isMockEnabled()            { return mockEnabled; }
 
     public void setBaseUrl(String v)               { this.baseUrl               = v; }
     public void setUsername(String v)              { this.username              = v; }
     public void setPassword(String v)              { this.password              = v; }
     public void setSessionCacheKeyPrefix(String v) { this.sessionCacheKeyPrefix = v; }
-    public void setMockEnabled(boolean v)          { this.mockEnabled           = v; }
 }

@@ -2,261 +2,337 @@
   <div class="page">
     <div class="toolbar">
       <h2>用户-账户绑定管理</h2>
+      <el-button :loading="pageLoading" @click="loadPage">刷新</el-button>
     </div>
+
+    <el-alert
+      title="管理端仅允许切换到 SANDBOX 账户。LIVE 账户需通过受控流程管理；前端限制不能替代后端授权与环境保护。"
+      type="warning"
+      show-icon
+      :closable="false"
+      class="notice"
+    />
+
+    <el-alert
+      v-if="pageError"
+      title="绑定管理数据加载失败"
+      :description="pageError"
+      type="error"
+      show-icon
+      :closable="false"
+      class="notice"
+    />
 
     <div class="section">
-      <label>选择用户：</label>
-      <select v-model.number="selectedUserId" @change="loadUserBinding" class="select">
-        <option :value="null">-- 请选择用户 --</option>
-        <option v-for="user in users" :key="user.id" :value="user.id">
-          {{ user.username }} (ID: {{ user.id }})
-        </option>
-      </select>
+      <label for="user-select">选择用户：</label>
+      <el-select
+        id="user-select"
+        v-model="selectedUserId"
+        placeholder="请选择用户"
+        filterable
+        clearable
+        :loading="pageLoading"
+        :disabled="pageLoading || bindingId !== null || !!pageError"
+        @change="loadUserBinding"
+      >
+        <el-option
+          v-for="user in users"
+          :key="user.userId"
+          :label="`${user.username} (ID: ${user.userId})`"
+          :value="user.userId"
+        />
+      </el-select>
     </div>
 
-    <div v-if="selectedUserId && currentBinding" class="section">
-      <h3>当前绑定的账户</h3>
-      <div class="binding-info">
-        <p><strong>用户：</strong> {{ currentBinding.username }}</p>
-        <p><strong>券商：</strong> {{ currentBinding.brokerName }} ({{ currentBinding.brokerCode }})</p>
-        <p><strong>账户号：</strong> {{ currentBinding.accountNo }}</p>
-        <p><strong>账户类型：</strong> {{ currentBinding.accountType }}</p>
-        <p><strong>API 环境：</strong> 
-          <span class="badge" :class="currentBinding.apiEnvironment">
-            {{ currentBinding.apiEnvironment }}
-          </span>
-        </p>
-        <p><strong>状态：</strong> {{ currentBinding.status }}</p>
+    <template v-if="selectedUserId && !pageError">
+      <el-skeleton v-if="bindingLoading" :rows="3" animated class="section" />
+      <el-alert
+        v-else-if="bindingError"
+        title="当前绑定状态加载失败"
+        :description="bindingError"
+        type="error"
+        show-icon
+        :closable="false"
+        class="notice"
+      >
+        <el-button type="primary" plain @click="loadUserBinding">重试</el-button>
+      </el-alert>
+
+      <div v-else-if="currentBinding" class="section">
+        <h3>当前绑定的账户</h3>
+        <div class="binding-info">
+          <p><strong>用户：</strong>{{ currentBinding.username || selectedUserName }}</p>
+          <p><strong>券商：</strong>{{ currentBinding.brokerName }} ({{ currentBinding.brokerCode }})</p>
+          <p><strong>账户号：</strong>{{ maskAccount(currentBinding.accountNo) }}</p>
+          <p><strong>账户类型：</strong>{{ currentBinding.accountType }}</p>
+          <p><strong>API 环境：</strong>
+            <el-tag :type="currentBinding.apiEnvironment === 'SANDBOX' ? 'success' : 'danger'">
+              {{ currentBinding.apiEnvironment }}
+            </el-tag>
+          </p>
+          <p><strong>状态：</strong>{{ currentBinding.status }}</p>
+        </div>
       </div>
-    </div>
 
-    <div v-if="selectedUserId" class="section">
-      <h3>切换为其他账户</h3>
-      <table v-if="availableAccounts.length > 0">
-        <thead>
-          <tr>
-            <th>操作</th>
-            <th>券商</th>
-            <th>账户号</th>
-            <th>类型</th>
-            <th>状态</th>
-            <th>API 环境</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="account in availableAccounts" :key="account.id">
-            <td>
-              <button 
-                v-if="account.id !== currentBinding?.id"
-                class="btn-bind"
-                @click="bindAccount(account)"
+      <div v-if="!bindingLoading && !bindingError" class="section">
+        <h3>切换为其他 SANDBOX 账户</h3>
+        <el-table
+          v-if="availableAccounts.length > 0"
+          v-loading="bindingId !== null"
+          :data="availableAccounts"
+          row-key="id"
+          stripe
+        >
+          <el-table-column label="操作" width="100">
+            <template #default="{ row }: { row: BrokerAccount }">
+              <el-button
+                v-if="row.id !== currentBinding?.id"
+                type="primary"
+                link
+                :loading="bindingId === row.id"
+                :disabled="bindingId !== null"
+                @click="bindAccount(row)"
               >
                 切换
-              </button>
-              <span v-else class="current">当前</span>
-            </td>
-            <td>{{ account.brokerName }}</td>
-            <td>{{ account.accountNo }}</td>
-            <td>{{ account.accountType }}</td>
-            <td>{{ account.status }}</td>
-            <td>
-              <span class="badge" :class="account.apiEnvironment">
-                {{ account.apiEnvironment }}
-              </span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <p v-else class="empty">该用户无可用的券商账户</p>
-    </div>
+              </el-button>
+              <el-tag v-else type="success">当前</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="brokerName" label="券商" min-width="140" />
+          <el-table-column label="账户号" min-width="140">
+            <template #default="{ row }: { row: BrokerAccount }">
+              {{ maskAccount(row.accountNo) }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="accountType" label="类型" width="110" />
+          <el-table-column prop="status" label="状态" width="110" />
+          <el-table-column prop="apiEnvironment" label="API 环境" width="120">
+            <template #default="{ row }: { row: BrokerAccount }">
+              <el-tag type="success">{{ row.apiEnvironment }}</el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+        <el-empty v-else description="没有可绑定的 SANDBOX 账户" />
+      </div>
 
-    <div v-if="selectedUserId && !currentBinding" class="section warning">
-      <p>该用户未绑定任何券商账户，请选择一个账户进行绑定。</p>
-    </div>
+      <el-alert
+        v-if="bindingState === 'unbound' && !bindingLoading && !bindingError"
+        title="该用户尚未绑定账户"
+        description="选择一个可用的 SANDBOX 账户进行绑定。"
+        type="info"
+        show-icon
+        :closable="false"
+      />
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/utils/request'
 
-const selectedUserId = ref<number | null>(null)
-const users = ref<any[]>([])
-const allAccounts = ref<any[]>([])
-const currentBinding = ref<any>(null)
-
-const availableAccounts = computed(() => {
-  // 只显示状态为 ACTIVE 的账户
-  return allAccounts.value.filter(a => a.status === 'ACTIVE')
-})
-
-const loadUsers = async () => {
-  users.value = await request.get('/admin/users')
+interface UserOption {
+  userId: number
+  username: string
 }
 
-const loadAllAccounts = async () => {
-  allAccounts.value = await request.get('/admin/broker-accounts')
+interface BrokerAccount {
+  id: number
+  userId: number
+  username: string | null
+  brokerName: string | null
+  brokerCode: string | null
+  accountNo: string
+  accountType: string
+  status: string
+  apiEnvironment: string
+  currentBindingUsername: string | null
+}
+
+type BindingState = 'idle' | 'loading' | 'bound' | 'unbound' | 'error'
+
+const selectedUserId = ref<number | null>(null)
+const users = ref<UserOption[]>([])
+const allAccounts = ref<BrokerAccount[]>([])
+const currentBinding = ref<BrokerAccount | null>(null)
+const pageLoading = ref(false)
+const pageError = ref('')
+const bindingLoading = ref(false)
+const bindingError = ref('')
+const bindingState = ref<BindingState>('idle')
+const bindingId = ref<number | null>(null)
+let bindingRequestId = 0
+
+const selectedUserName = computed(
+  () => users.value.find(user => user.userId === selectedUserId.value)?.username || ''
+)
+const availableAccounts = computed(() =>
+  allAccounts.value.filter(account =>
+    account.status === 'ACTIVE'
+    && account.apiEnvironment === 'SANDBOX'
+    && (!account.currentBindingUsername || account.currentBindingUsername === selectedUserName.value)
+  )
+)
+
+const errorMessage = (error: unknown) => {
+  if (typeof error === 'object' && error !== null && 'error' in error) {
+    const body = error.error
+    if (typeof body === 'object' && body !== null && 'message' in body && typeof body.message === 'string') {
+      return body.message
+    }
+  }
+  if (error instanceof Error && error.message) return error.message
+  return String(error)
+}
+
+const isNotFound = (error: unknown) => {
+  if (typeof error !== 'object' || error === null || !('error' in error)) return false
+  const body = error.error
+  return typeof body === 'object'
+    && body !== null
+    && 'code' in body
+    && (body.code === 'RESOURCE_NOT_FOUND' || body.code === 'ACCOUNT_NOT_FOUND')
+}
+
+const maskAccount = (accountNo: string) =>
+  accountNo.length <= 4 ? '••••' : `${'•'.repeat(Math.min(accountNo.length - 4, 8))}${accountNo.slice(-4)}`
+
+const loadPage = async () => {
+  pageLoading.value = true
+  pageError.value = ''
+  try {
+    const [userResult, accountResult] = await Promise.all([
+      request.get<UserOption[]>('/users'),
+      request.get<BrokerAccount[]>('/admin/broker-accounts')
+    ])
+    if (!Array.isArray(userResult) || !Array.isArray(accountResult)) {
+      throw new Error('服务器返回的数据格式无效')
+    }
+    users.value = userResult
+    allAccounts.value = accountResult
+    if (selectedUserId.value !== null) await loadUserBinding()
+  } catch (error) {
+    pageError.value = errorMessage(error)
+  } finally {
+    pageLoading.value = false
+  }
 }
 
 const loadUserBinding = async () => {
-  if (!selectedUserId.value) {
+  const requestId = ++bindingRequestId
+  if (selectedUserId.value === null) {
     currentBinding.value = null
+    bindingError.value = ''
+    bindingState.value = 'idle'
+    bindingLoading.value = false
     return
   }
 
+  bindingLoading.value = true
+  bindingError.value = ''
+  bindingState.value = 'loading'
   try {
-    currentBinding.value = await request.get(`/admin/broker-accounts/user/${selectedUserId.value}/current`)
-  } catch (error) {
-    // 用户未绑定账户
-    currentBinding.value = null
-  }
-}
-
-const bindAccount = async (account: any) => {
-  if (!selectedUserId.value) return
-  
-  if (!confirm(`确认将用户 ${users.value.find(u => u.id === selectedUserId.value)?.username} 绑定到账户 ${account.accountNo} ?`)) {
-    return
-  }
-
-  try {
-    await request.post(
-      `/admin/broker-accounts/user/${selectedUserId.value}/bind/${account.id}`,
-      {}
+    const userId = selectedUserId.value
+    const result = await request.get<BrokerAccount>(
+      `/admin/broker-accounts/user/${userId}/current`
     )
-    await loadUserBinding()
-    alert('账户绑定成功')
+    if (requestId !== bindingRequestId || selectedUserId.value !== userId) return
+    currentBinding.value = result
+    bindingState.value = 'bound'
   } catch (error) {
-    alert('账户绑定失败：' + (error as any).message)
+    if (requestId !== bindingRequestId) return
+    currentBinding.value = null
+    if (isNotFound(error)) {
+      bindingState.value = 'unbound'
+    } else {
+      bindingState.value = 'error'
+      bindingError.value = errorMessage(error)
+    }
+  } finally {
+    if (requestId === bindingRequestId) bindingLoading.value = false
   }
 }
 
-onMounted(async () => {
-  await loadUsers()
-  await loadAllAccounts()
-})
+const bindAccount = async (account: BrokerAccount) => {
+  if (selectedUserId.value === null || bindingId.value !== null) return
+  const userId = selectedUserId.value
+  try {
+    await ElMessageBox.confirm(
+      `确认将用户“${selectedUserName.value}”绑定到账户 ${maskAccount(account.accountNo)}？`,
+      '切换 SANDBOX 账户',
+      {
+        type: 'warning',
+        confirmButtonText: '确认切换',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    return
+  }
+
+  bindingId.value = account.id
+  try {
+    await request.post<void>(`/admin/broker-accounts/user/${userId}/bind/${account.id}`)
+    await loadUserBinding()
+    ElMessage.success('账户绑定已更新')
+  } catch (error) {
+    await loadUserBinding()
+    ElMessage.error(`绑定请求未确认，请核对当前绑定状态：${errorMessage(error)}`)
+  } finally {
+    bindingId.value = null
+  }
+}
+
+onMounted(loadPage)
 </script>
 
 <style scoped>
 .page {
-  padding: 16px;
   max-width: 1000px;
+  margin: 0 auto;
+  padding: 16px;
 }
 
 .toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
   margin-bottom: 20px;
 }
 
 .toolbar h2 {
   margin: 0;
-  font-size: 24px;
+  font-size: 22px;
 }
 
 .section {
-  background: #fff;
-  padding: 16px;
   margin-bottom: 16px;
-  border-radius: 6px;
+  padding: 16px;
   border: 1px solid #e6e6e6;
+  border-radius: 6px;
+  background: #fff;
 }
 
 .section h3 {
-  margin-top: 0;
-  margin-bottom: 12px;
+  margin: 0 0 12px;
   font-size: 16px;
-  color: #333;
 }
 
-.select {
-  padding: 8px 12px;
-  border: 1px solid #d0d7e3;
-  border-radius: 4px;
-  font-size: 14px;
-  min-width: 300px;
+.notice {
+  margin-bottom: 16px;
 }
 
 .binding-info {
-  background: #f7f8fb;
   padding: 12px;
   border-radius: 4px;
+  background: #f7f8fb;
   line-height: 1.8;
 }
 
 .binding-info p {
   margin: 6px 0;
   font-size: 14px;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-th, td {
-  padding: 10px 12px;
-  border: 1px solid #e6e6e6;
-  text-align: left;
-}
-
-th {
-  background: #f7f8fb;
-  font-weight: 600;
-  font-size: 13px;
-}
-
-td {
-  font-size: 13px;
-}
-
-.btn-bind {
-  padding: 6px 12px;
-  border: none;
-  border-radius: 4px;
-  background: #42b883;
-  color: #fff;
-  cursor: pointer;
-  font-size: 12px;
-  transition: background 0.2s;
-}
-
-.btn-bind:hover {
-  background: #369b6f;
-}
-
-.current {
-  color: #42b883;
-  font-weight: 600;
-  font-size: 12px;
-}
-
-.badge {
-  display: inline-block;
-  padding: 3px 8px;
-  border-radius: 3px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.badge.LIVE {
-  background: #e8f5e9;
-  color: #2e7d32;
-}
-
-.badge.SANDBOX {
-  background: #fff3e0;
-  color: #e65100;
-}
-
-.empty {
-  text-align: center;
-  color: #888;
-  padding: 20px;
-  font-size: 14px;
-}
-
-.warning {
-  background: #fff9e6;
-  border: 1px solid #ffd933;
-  color: #b87803;
 }
 </style>

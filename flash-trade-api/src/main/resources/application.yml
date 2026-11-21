@@ -1,5 +1,16 @@
 # Spring Boot 配置基础文件
 # 激活的 profile 由环境变量 SPRING_PROFILES_ACTIVE 控制，默认使用 dev
+app:
+  broker:
+    # 当前仅允许 Mock。Sandbox/Production 需在各自验收阶段单独开放。
+    allowed-modes: MOCK
+  security:
+    # Empty by default: forwarding headers are ignored until trusted proxy CIDRs are configured.
+    trusted-proxies: ${APP_SECURITY_TRUSTED_PROXIES:}
+    bootstrap-super-admin:
+      enabled: ${BOOTSTRAP_SUPER_ADMIN_ENABLED:false}
+      username: ${BOOTSTRAP_SUPER_ADMIN_USERNAME:}
+
 spring:
   application:
     name: FlashTradeAPI
@@ -73,4 +84,3 @@ flashtrade:
       enabled: false        # dev/test profile では true に設定
       port: 9876
       fix-version: "FIX.4.2"
-

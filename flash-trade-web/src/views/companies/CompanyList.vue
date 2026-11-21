@@ -1,183 +1,308 @@
 <template>
-  <div class="page">
-    <div class="toolbar">
-      <div style="display:flex; gap:12px; align-items:center;">
-        <button class="primary" @click="goCreate">➕ 新建公司</button>
-        <input v-model="q" placeholder="按名称搜索" @keyup.enter="search" style="padding:6px 10px; border-radius:6px; border:1px solid #ddd;" />
-        <button @click="search" class="btn">搜索</button>
+  <div class="company-list-page">
+    <el-card>
+      <template #header>
+        <div class="card-header">
+          <h2>公司管理</h2>
+          <div class="header-actions">
+            <el-button :loading="loading" @click="loadCompanies">刷新</el-button>
+            <el-button type="primary" @click="goCreate">新建公司</el-button>
+          </div>
+        </div>
+      </template>
+
+      <el-form :inline="true" class="filters" @submit.prevent="search">
+        <el-form-item label="公司名称">
+          <el-input
+            v-model="keyword"
+            clearable
+            placeholder="输入公司名称"
+            @keyup.enter="search"
+          />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" :loading="loading" @click="search">搜索</el-button>
+        </el-form-item>
+      </el-form>
+
+      <el-alert
+        v-if="loadError"
+        class="load-error"
+        title="公司列表加载失败"
+        :description="loadError"
+        type="error"
+        show-icon
+        :closable="false"
+      />
+
+      <el-table
+        v-loading="loading"
+        :data="companies"
+        row-key="id"
+        stripe
+        empty-text="暂无公司数据"
+      >
+        <el-table-column prop="id" label="公司 ID" width="100" />
+        <el-table-column prop="name" label="公司名称" min-width="180" show-overflow-tooltip />
+        <el-table-column prop="groupCount" label="分组数" width="100" />
+        <el-table-column label="状态" width="110">
+          <template #default="{ row }: { row: Company }">
+            <el-tag :type="row.isActive ? 'success' : 'info'">
+              {{ row.isActive ? '已启用' : '已停用' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="createdAt" label="创建时间" min-width="180">
+          <template #default="{ row }: { row: Company }">
+            {{ formatDate(row.createdAt) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" min-width="230" fixed="right">
+          <template #default="{ row }: { row: Company }">
+            <el-button link type="primary" :disabled="isUpdating(row.id)" @click="goView(row)">查看</el-button>
+            <el-button link type="primary" :disabled="isUpdating(row.id)" @click="goEdit(row)">编辑</el-button>
+            <el-button
+              link
+              :type="row.isActive ? 'warning' : 'success'"
+              :loading="isUpdating(row.id)"
+              @click="toggleStatus(row)"
+            >
+              {{ row.isActive ? '停用' : '启用' }}
+            </el-button>
+            <el-button
+              link
+              type="danger"
+              :disabled="isUpdating(row.id)"
+              @click="deleteCompany(row)"
+            >
+              删除
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <div class="pagination">
+        <span>共 {{ total }} 家公司</span>
+        <el-pagination
+          v-model:current-page="page"
+          v-model:page-size="size"
+          :page-sizes="[10, 20, 50]"
+          :total="total"
+          layout="sizes, prev, pager, next"
+          background
+          @current-change="loadCompanies"
+          @size-change="changePageSize"
+        />
       </div>
-    </div>
-
-    <table>
-      <thead>
-        <tr>
-          <th class="ops-col"></th>
-          <th>ID</th>
-          <th>公司名称</th>
-          <th>分组数</th>
-          <th>状态</th>
-          <th>创建时间</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="company in companies" :key="company.id">
-          <td class="ops">
-            <i class="icon view" @click="goView(company)" title="查看"></i>
-            <i class="icon edit" @click="goEdit(company)" title="编辑"></i>
-            <i
-              class="icon toggle"
-              :class="company.isActive ? 'pause' : 'play'"
-              @click="toggle(company)"
-              :title="company.isActive ? '停用公司' : '启用公司'"
-            ></i>
-            <i class="icon delete" @click="remove(company)" title="删除"></i>
-          </td>
-          <td>{{ company.id }}</td>
-          <td>{{ company.name }}</td>
-          <td>{{ company.groupCount ?? 0 }}</td>
-          <td>
-            <span :class="company.isActive ? 'on' : 'off'">
-              {{ company.isActive ? '已启用' : '已停用' }}
-            </span>
-          </td>
-          <td>{{ formatDate(company.createdAt) }}</td>
-        </tr>
-        <tr v-if="companies.length === 0">
-          <td colspan="6" class="empty">暂无公司数据</td>
-        </tr>
-      </tbody>
-    </table>
-
-    <div class="pagination">
-      <button class="btn" @click="prevPage" :disabled="page === 0">上一页</button>
-      <span style="margin:0 12px">第 {{ page + 1 }} 页 / 共 {{ Math.max(1, Math.ceil(total / size)) }} 页（共 {{ total }} 条）</span>
-      <button class="btn" @click="nextPage" :disabled="(page + 1) * size >= total">下一页</button>
-    </div>
+    </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/utils/request'
 
-const router = useRouter()
-const companies = ref<any[]>([])
-const q = ref<string>('')
-const page = ref<number>(0)
-const size = ref<number>(20)
-const total = ref<number>(0)
-
-const load = async () => {
-  const res = await request.get('/api/v1/admin/companies', { params: { page: page.value, size: size.value, q: q.value || undefined } })
-  // res: { items: [], total, page, size }
-  companies.value = (res?.items) || []
-  total.value = res?.total || 0
+interface Company {
+  id: number
+  name: string
+  isActive: boolean
+  groupCount: number
+  createdAt: string
 }
 
-const search = async () => {
-  page.value = 0
-  await load()
+interface CompanyPage {
+  items: Company[]
+  total: number
+  page: number
+  size: number
+}
+
+const router = useRouter()
+const companies = ref<Company[]>([])
+const keyword = ref('')
+const page = ref(1)
+const size = ref(20)
+const total = ref(0)
+const loading = ref(false)
+const loadError = ref('')
+const updatingIds = ref(new Set<number>())
+let activeListRequest = 0
+
+const errorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message) return error.message
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const message = error.message
+    if (typeof message === 'string' && message) return message
+  }
+  return fallback
+}
+
+const loadCompanies = async () => {
+  const requestId = ++activeListRequest
+  loading.value = true
+  loadError.value = ''
+  try {
+    const result = await request.get<CompanyPage>('/api/v1/admin/companies', {
+      params: {
+        page: page.value - 1,
+        size: size.value,
+        q: keyword.value.trim() || undefined
+      }
+    })
+    if (!result || !Array.isArray(result.items) || typeof result.total !== 'number') {
+      throw new Error('服务器返回的公司列表格式无效')
+    }
+    if (requestId === activeListRequest) {
+      companies.value = result.items
+      total.value = result.total
+    }
+  } catch (error: unknown) {
+    if (requestId === activeListRequest) {
+      loadError.value = errorMessage(error, '请检查管理端 API 服务后重试')
+    }
+  } finally {
+    if (requestId === activeListRequest) loading.value = false
+  }
+}
+
+const search = () => {
+  page.value = 1
+  void loadCompanies()
+}
+
+const changePageSize = () => {
+  page.value = 1
+  void loadCompanies()
 }
 
 const goCreate = () => router.push({ name: 'CompanyCreate' })
-const goEdit = (company: any) => router.push({ name: 'CompanyEdit', params: { id: company.id } })
-const goView = (company: any) => router.push({ name: 'CompanyView', params: { id: company.id } })
+const goEdit = (company: Company) => router.push({ name: 'CompanyEdit', params: { id: company.id } })
+const goView = (company: Company) => router.push({ name: 'CompanyView', params: { id: company.id } })
+const isUpdating = (companyId: number) => updatingIds.value.has(companyId)
 
-const toggle = async (company: any) => {
+const setUpdating = (companyId: number, updating: boolean) => {
+  const ids = new Set(updatingIds.value)
+  if (updating) ids.add(companyId)
+  else ids.delete(companyId)
+  updatingIds.value = ids
+}
+
+const toggleStatus = async (company: Company) => {
   const nextState = !company.isActive
-  if (!confirm(company.isActive ? `确认停用公司 ${company.name}?` : `确认启用公司 ${company.name}?`)) return
+  const action = nextState ? '启用' : '停用'
+  try {
+    await ElMessageBox.confirm(
+      `确认${action}公司“${company.name}”吗？`,
+      `${action}公司`,
+      {
+        type: nextState ? 'info' : 'warning',
+        confirmButtonText: `确认${action}`,
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    return
+  }
 
+  setUpdating(company.id, true)
   try {
     await request.post(`/api/v1/admin/companies/${company.id}/status`, { isActive: nextState })
     company.isActive = nextState
-  } catch (error) {
-    alert('状态更新失败')
+    ElMessage.success(`公司已${action}`)
+  } catch (error: unknown) {
+    await loadCompanies()
+    ElMessage.warning(`${action}请求结果未确认，请核对公司当前状态后再执行后续操作：${errorMessage(error, '请刷新列表确认')}`)
+  } finally {
+    setUpdating(company.id, false)
   }
 }
 
-const remove = async (company: any) => {
-  if (!confirm(`确认删除公司 ${company.name}?`)) return
+const deleteCompany = async (company: Company) => {
+  try {
+    await ElMessageBox.confirm(
+      `删除公司“${company.name}”将同时删除其所属分组，且无法撤销。`,
+      '删除公司',
+      {
+        type: 'error',
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    return
+  }
 
+  setUpdating(company.id, true)
   try {
     await request.delete(`/api/v1/admin/companies/${company.id}`)
-    await load()
-  } catch (error) {
-    alert('删除失败')
+    ElMessage.success('公司已删除')
+    if (companies.value.length === 1 && page.value > 1) page.value -= 1
+    await loadCompanies()
+  } catch (error: unknown) {
+    await loadCompanies()
+    ElMessage.warning(`删除请求结果未确认，已刷新列表，请先确认公司是否仍存在：${errorMessage(error, '请刷新列表确认')}`)
+  } finally {
+    setUpdating(company.id, false)
   }
 }
 
-const prevPage = async () => {
-  if (page.value > 0) {
-    page.value -= 1
-    await load()
-  }
-}
-
-const nextPage = async () => {
-  const lastPage = Math.max(0, Math.ceil(total.value / size.value) - 1)
-  if (page.value < lastPage) {
-    page.value += 1
-    await load()
-  }
-}
-
-const formatDate = (value: string | undefined) => {
-  if (!value) return '-'
+const formatDate = (value: string) => {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
 }
 
-onMounted(load)
+onMounted(loadCompanies)
 </script>
 
 <style scoped>
-.page {
-  padding: 16px;
+.company-list-page {
+  min-width: 0;
 }
 
-.toolbar {
-  margin-bottom: 12px;
-}
-
-.ops-col { width: 110px; }
-.ops {
+.card-header,
+.header-actions,
+.pagination {
   display: flex;
-  gap: 8px;
-  justify-content: center;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-.icon {
-  width: 18px;
-  height: 18px;
-  cursor: pointer;
-  opacity: 0.8;
-  user-select: none;
-}
-.icon:hover { opacity: 1; transform: scale(1.14); }
-
-.icon.view::before { content: '👁️'; }
-.icon.edit::before { content: '✏️'; }
-.icon.pause::before { content: '⏸️'; }
-.icon.play::before { content: '▶️'; }
-.icon.delete::before { content: '🗑️'; }
-
-.on { color: #2ecc71; font-weight: 600; }
-.off { color: #e74c3c; font-weight: 600; }
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-  background: #fff;
+.card-header h2 {
+  margin: 0;
+  font-size: 18px;
 }
 
-th, td {
-  padding: 8px 10px;
-  border-bottom: 1px solid #eee;
-  white-space: nowrap;
+.filters {
+  margin-bottom: 8px;
 }
 
-th { background: #f8f9fa; text-align: left; }
-.empty { text-align: center; color: #999; padding: 16px; }
+.load-error {
+  margin-bottom: 16px;
+}
+
+.pagination {
+  margin-top: 20px;
+  color: #606266;
+}
+
+@media (max-width: 640px) {
+  .card-header,
+  .pagination {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .header-actions,
+  .pagination :deep(.el-pagination) {
+    width: 100%;
+  }
+
+  .pagination :deep(.el-pagination) {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+}
 </style>

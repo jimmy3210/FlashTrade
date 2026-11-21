@@ -6,6 +6,7 @@
 // tree, read text, and verify that the values of widget properties are correct.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -13,7 +14,21 @@ import 'package:flash_trade_app/app.dart';
 
 void main() {
   testWidgets('FlashTrade app smoke test', (WidgetTester tester) async {
+    const storageChannel = MethodChannel(
+      'plugins.it_nomads.com/flutter_secure_storage',
+    );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(storageChannel, (_) async => null);
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding
+          .instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(storageChannel, null),
+    );
+
     await tester.pumpWidget(const ProviderScope(child: FlashTradeApp()));
     expect(find.byType(MaterialApp), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 1500));
+    await tester.pump();
   });
 }

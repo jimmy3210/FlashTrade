@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
  * <p>
  * 对应 application.yml 中 {@code app.schwab.*} 配置项。
  * {@code @RefreshScope} 允许调用 {@code POST /actuator/refresh} 后
- * 无需重启应用即可动态加载更新后的配置（如切换 Mock 模式、调整超时时间）。
+ * 无需重启应用即可动态加载更新后的连接配置。
  * 敏感字段（clientId / clientSecret）通过环境变量注入，禁止硬编码。
  */
 @Component
@@ -47,9 +47,6 @@ public class SchwabProperties {
     /** HTTP 读取超时（毫秒） */
     private int readTimeoutMs = 15000;
 
-    /** 是否启用嘉信证券模拟模式（true 时返回 Mock 数据，不实际调用外部 API） */
-    private boolean mockEnabled = false;
-
     // --- Getters & Setters ---
 
     public String getClientId()                        { return clientId; }
@@ -79,6 +76,4 @@ public class SchwabProperties {
     public int getReadTimeoutMs()                      { return readTimeoutMs; }
     public void setReadTimeoutMs(int v)                { this.readTimeoutMs = v; }
 
-    public boolean isMockEnabled()                     { return mockEnabled; }
-    public void setMockEnabled(boolean v)              { this.mockEnabled = v; }
 }

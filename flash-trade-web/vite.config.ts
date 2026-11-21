@@ -2,7 +2,12 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
 
-export default defineConfig(({ command }) => {
+const apiProxy = () => ({
+  target: 'http://localhost:8080',
+  changeOrigin: true
+})
+
+export default defineConfig(() => {
   return {
     plugins: [vue()],
     base: '/quicktrade/admin/',
@@ -16,11 +21,10 @@ export default defineConfig(({ command }) => {
     server: {
       port: 5174,
       proxy: {
-        '/QuickTrade/web': {
-          target: 'http://localhost:8080',
-          changeOrigin: true,
-          rewrite: path => path
-        }
+        '/api': apiProxy(),
+        '/admin': apiProxy(),
+        '/users': apiProxy(),
+        '/positions': apiProxy()
       }
     },
 

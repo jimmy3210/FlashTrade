@@ -1,0 +1,129 @@
+name: flashtrade-production
+
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+  redis_password:
+    file: ./secrets/redis_password.txt
+  jwt_secret:
+    file: ./secrets/jwt_secret.txt
+
+services:
+  config-server:
+    profiles:
+      - disabled
+
+  mysql:
+    restart: unless-stopped
+    ports: !override []
+    environment: !override
+      MYSQL_DATABASE: flash_trade_prod
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/db_password
+      MYSQL_PASSWORD_FILE: /run/secrets/db_password
+      MYSQL_USER: flashtrade
+    secrets:
+      - db_password
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - MYSQL_PWD="$$(cat /run/secrets/db_password)" mysqladmin ping -h 127.0.0.1 -uroot --silent
+    volumes: !override
+      - /var/lib/flashtrade/mysql:/var/lib/mysql
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    networks: !override
+      - flashtrade-production
+
+  redis:
+    restart: unless-stopped
+    ports: !override []
+    secrets:
+      - redis_password
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - redis-cli -a "$$(cat /run/secrets/redis_password)" ping | grep -q PONG
+    command:
+      - /bin/sh
+      - -c
+      - exec redis-server --appendonly yes --save 60 1 --loglevel warning --requirepass "$$(cat /run/secrets/redis_password)"
+    volumes: !override
+      - /var/lib/flashtrade/redis:/data
+    networks: !override
+      - flashtrade-production
+
+  flashtrade-api:
+    restart: unless-stopped
+    env_file: !override []
+    environment: !override
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/flash_trade_prod?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Tokyo&allowPublicKeyRetrieval=true&useSSL=false
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: flash_trade_prod
+      DB_USERNAME: flashtrade
+      DB_PASSWORD_FILE: /run/secrets/db_password
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD_FILE: /run/secrets/redis_password
+      SPRING_DATA_REDIS_SSL_ENABLED: "false"
+      JWT_SECRET_FILE: /run/secrets/jwt_secret
+      APP_BROKER_ALLOWED_MODES: MOCK
+      APP_SECURITY_WEB_AUTH_REFRESH_COOKIE_SECURE: "true"
+    secrets: !override
+      - db_password
+      - redis_password
+      - jwt_secret
+    ports: !override
+      - "127.0.0.1:8080:8080"
+    depends_on: !override
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: !override
+      - flashtrade-production
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+
+  flyway:
+    restart: "no"
+    ports: !override []
+    environment: !override {}
+    entrypoint:
+      - /bin/sh
+      - -c
+    command:
+      - export FLYWAY_PASSWORD="$$(cat /run/secrets/db_password)"; export FLYWAY_URL='jdbc:mysql://mysql:3306/flash_trade_prod?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Tokyo&allowPublicKeyRetrieval=true&useSSL=false'; export FLYWAY_USER='flashtrade'; export FLYWAY_LOCATIONS='filesystem:/flyway/sql/migration'; exec flyway migrate
+    secrets:
+      - db_password
+    networks: !override
+      - flashtrade-production
+
+  flashtrade-mock:
+    profiles:
+      - disabled
+
+  flashtrade-admin:
+    restart: unless-stopped
+    ports: !override
+      - "127.0.0.1:5174:5174"
+    networks: !override
+      - flashtrade-production
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+
+networks:
+  flashtrade-production:
+    driver: bridge

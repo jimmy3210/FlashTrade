@@ -239,6 +239,12 @@ abstract class AppLocalizations {
   /// **'退出登录'**
   String get homeLogout;
 
+  /// No description provided for @logoutServerRevocationUnconfirmed.
+  ///
+  /// In zh, this message translates to:
+  /// **'已清除本机凭证，但服务器会话撤销未确认。'**
+  String get logoutServerRevocationUnconfirmed;
+
   /// No description provided for @homeRefresh.
   ///
   /// In zh, this message translates to:

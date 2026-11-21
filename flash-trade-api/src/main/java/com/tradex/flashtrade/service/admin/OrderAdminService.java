@@ -3,6 +3,7 @@ package com.tradex.flashtrade.service.admin;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -38,6 +39,14 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @Slf4j
 public class OrderAdminService {
+
+    private static final Map<String, String> ORDER_SORT_PROPERTIES = Map.of(
+            "created_at", "createdAt",
+            "updated_at", "updatedAt",
+            "quantity", "quantity",
+            "price", "limitPrice",
+            "id", "id",
+            "symbol", "symbol");
     
     @Autowired private OrderRepository orderRepository;
     @Autowired private UserRepository userRepository;
@@ -54,7 +63,10 @@ public class OrderAdminService {
             // 构建排序条件
             Direction direction = "asc".equalsIgnoreCase(filter.getSortOrder()) 
                 ? Direction.ASC : Direction.DESC;
-            Sort sort = Sort.by(direction, filter.getSortBy());
+            String requestedSort = filter.getSortBy();
+            String sortProperty = ORDER_SORT_PROPERTIES.getOrDefault(
+                    requestedSort == null ? "" : requestedSort, "createdAt");
+            Sort sort = Sort.by(direction, sortProperty);
             Pageable pageable = PageRequest.of(page - 1, pageSize, sort);
             
             // 构建查询条件
@@ -177,50 +189,13 @@ public class OrderAdminService {
     }
     
     /**
-     * 取消异常订单（仅管理员）
+     * 撤单结果核验能力完成前拒绝取消请求。
      */
-    @Transactional
     public OrderAdminDto cancelOrder(Long orderId, CancelOrderRequest request, Long adminId) {
-        log.warn("⚠️  Admin cancelling order: orderId={}, reason={}, adminId={}, timestamp={}", 
-                orderId, request.getReason(), adminId, LocalDateTime.now());
-        
-        Order order = orderRepository.findById(orderId)
-            .orElseThrow(() -> {
-                log.error("❌ Order not found for cancellation: orderId={}", orderId);
-                return new BusinessException(ErrorCode.NOT_FOUND, "订单不存在");
-            });
-        
-        // 检查订单状态是否允许取消
-        if (order.getStatus() == OrderStatus.FILLED || order.getStatus() == OrderStatus.CANCELLED) {
-            log.error("❌ Cannot cancel order with status: orderId={}, status={}", orderId, order.getStatus());
-            throw new BusinessException(ErrorCode.INVALID_STATE, "订单状态不允许取消: " + order.getStatus());
-        }
-        
-        OrderStatus oldStatus = order.getStatus();
-        order.setStatus(OrderStatus.CANCELLED);
-        order.setRiskFlag("CANCELLED_BY_ADMIN");
-        order.setAdminNote(request.getReason());
-        order.setAdminId(adminId);
-        order.setAdminActionTime(LocalDateTime.now());
-        
-        Order updated = orderRepository.save(order);
-        
-        log.warn("✅ Order cancelled by admin successfully: orderId={}, oldStatus={}, reason={}", 
-                orderId, oldStatus, request.getReason());
-        
-        // 记录操作日志
-        try {
-            auditLogger.logOperation(adminId, null, "CANCEL_ORDER", "ORDER", orderId,
-                    String.valueOf(orderId),
-                    java.util.Map.of("status", oldStatus),
-                    java.util.Map.of("status", "CANCELLED"),
-                    "管理员取消订单: " + request.getReason(),
-                    null, null, null, 200, null);
-        } catch (Exception e) {
-            log.error("Failed to log operation", e);
-        }
-        
-        return convertToAdminDto(updated);
+        log.warn("Admin order cancellation rejected pending broker-side verification: orderId={}, adminId={}",
+                orderId, adminId);
+        throw new BusinessException(ErrorCode.INVALID_STATE,
+                "订单撤单已暂停，待补齐券商侧执行结果核验和审计能力");
     }
     
     /**
