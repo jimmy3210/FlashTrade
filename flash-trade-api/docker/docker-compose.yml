@@ -10,6 +10,8 @@
 #   echo "$(openssl rand -base64 32)" > secrets/jwt_secret.txt
 # ===================================================
 
+name: flashtrade
+
 # -----------------------------------------------
 # Docker Secrets 定义
 # -----------------------------------------------
@@ -46,7 +48,9 @@ services:
     ports:
       - "8888:8888"
     healthcheck:
-      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8888/actuator/health" ]
+      test:
+        - CMD-SHELL
+        - bash -c 'echo > /dev/tcp/127.0.0.1/8888'
       interval: 15s
       timeout: 5s
       retries: 5
@@ -190,12 +194,14 @@ services:
     networks:
       - flashtrade-network
 
-volumes:
-  mysql_data:
-    driver: local
-  redis_data:
-    driver: local
-
 networks:
   flashtrade-network:
     driver: bridge
+
+volumes:
+  mysql_data:
+    name: docker_mysql_data
+    external: true
+  redis_data:
+    name: docker_redis_data
+    external: true

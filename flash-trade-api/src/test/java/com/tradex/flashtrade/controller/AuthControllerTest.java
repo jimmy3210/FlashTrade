@@ -72,6 +72,14 @@ class AuthControllerTest {
                 .containsExactly("ROLE_SUPER_ADMIN");
     }
 
+    @Test
+    @DisplayName("当前会话接口无认证主体时返回未认证业务异常")
+    void currentSession_missingPrincipal_returnsUnauthorized() {
+        org.junit.jupiter.api.Assertions.assertThrows(
+                BusinessException.class,
+                () -> new AuthController(authService, clientIpResolver).currentSession(null));
+    }
+
     // ============================================================
     // POST /api/auth/login
     // ============================================================

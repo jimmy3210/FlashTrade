@@ -147,6 +147,9 @@ public class AuthController {
     @Operation(summary = "获取当前会话身份", description = "返回当前已认证用户的角色，用于管理端界面权限展示")
     public ResponseEntity<ApiResponse<AuthSessionResponse>> currentSession(
             @AuthenticationPrincipal UserDetails userDetails) {
+        if (userDetails == null) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED);
+        }
         List<String> roles = userDetails.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .sorted()

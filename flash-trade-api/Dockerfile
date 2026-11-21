@@ -27,6 +27,9 @@ RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
 WORKDIR /app
 
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod 0555 /usr/local/bin/docker-entrypoint.sh
+
 # ビルド成果物をコピー
 COPY --from=builder /build/target/FlashTradeAPI-*.jar app.jar
 
@@ -39,7 +42,8 @@ USER appuser
 EXPOSE 8080
 
 # JVM 最適化オプション（コンテナフレンドリー）
-ENTRYPOINT ["java", \
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["java", \
   "-XX:+UseContainerSupport", \
   "-XX:MaxRAMPercentage=75.0", \
   "-Djava.security.egd=file:/dev/./urandom", \
